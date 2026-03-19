@@ -37,6 +37,8 @@ services:
     networks:
       - coolify
 
+  # Coolify: Post-deployment command must run **in this service** (`coder`), not `database`.
+  # Command: `sh /deploy/post-deploy.sh` — see docs/COOLIFY_E2E.md if the template does not update on redeploy.
   coder:
     image: ghcr.io/coder/coder:${CODER_VERSION:-latest}
     depends_on:

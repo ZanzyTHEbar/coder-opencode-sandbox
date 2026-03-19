@@ -80,6 +80,19 @@ There is **no** documented way to run `coder templates push` with **zero** API c
 
 ### 3. Post-deployment command
 
+**Docker Compose — which container runs the command**
+
+This stack has two services: **`database`** and **`coder`**. The script **`sh /deploy/post-deploy.sh`** must run inside the **`coder`** container (it needs the **`coder`** CLI, `CODER_TOKEN`, and bind mounts **`/templates`** and **`/deploy`**).
+
+In Coolify **v4**, when you set a post-deployment command on a Compose application, select the **service** / **container** explicitly (often labeled **“Execute on service”**, **“Container”**, or similar). If the command runs on **`database`**, it will fail or do nothing useful, and the template will **not** update.
+
+**“Restart” vs full deploy**
+
+Some actions recycle containers **without** running lifecycle hooks. If the template did not refresh:
+
+- Trigger a **full deployment** (redeploy / pull latest / deploy) from the Coolify UI and confirm the deployment log includes the post-deploy step.
+- Check the log for `post-deploy: start host=` and `Template opencode-sandbox pushed successfully.`
+
 **Recommended (repo root base directory):**
 
 ```bash
@@ -183,5 +196,6 @@ Post-deploy only needs the **`CODER_TOKEN` env var** in the container, not an op
 
 - **`templates not found` / `post-deploy not found`** — Ensure **Base directory** is repo root (`.`) so mounts exist. If you must use `coder-deployment` only, use the **fetch-and-run** commands in §3.
 - **`curl: not found`** — Use the **wget** fetch variant in §3 (fallback only).
-- **Template not updated after deploy** — Ensure `CODER_TOKEN` is set in Coolify. Check Coolify logs for the post-deploy step; the script logs “Template opencode-sandbox pushed successfully.” on success.
-- **Post-deploy fails: “connection refused”** — Coder server may not be ready yet. The script retries for up to ~1 minute.
+- **Template not updated after deploy** — Ensure `CODER_TOKEN` is set in Coolify and is still valid (expired tokens fail `coder templates push`). Confirm post-deploy runs on the **`coder`** service (see **§3 Post-deployment command**). Check Coolify deployment logs for `post-deploy:` lines and `Template opencode-sandbox pushed successfully.`
+- **Post-deploy fails: “connection refused”** — Coder server may not be ready yet. The script waits for `/healthz` or `/api/v2/buildinfo`, then retries the push for up to ~2 minutes (override with `POST_DEPLOY_HEALTH_MAX_WAIT` / `POST_DEPLOY_PUSH_MAX_ATTEMPTS` if needed).
+- **`coderd.inbox_notifications_watcher` / `failed to heartbeat ping` / `use of closed network connection`** — Usually a **disconnected browser WebSocket** (tab closed, network blip) or proxy idle timeout. If it is **occasional**, it is safe to ignore. If it is **constant**, check Traefik/Pangolin WebSocket support and timeouts, and that **`CODER_DERP_FORCE_WEBSOCKETS`** matches your edge (already `true` in root compose). Not specific to post-deploy.
