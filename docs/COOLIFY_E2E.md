@@ -107,6 +107,22 @@ After that, every deploy will refresh the template automatically. For **future l
 
 **Deadlock:** If you set `CODER_DISABLE_PASSWORD_AUTH=true` before creating the first user, the setup screen may not let you create an account. Use password once on the setup screen (step 2), then switch to OIDC-only on the login page if desired.
 
+#### “Redeploy wipes my login / I need a redeploy to apply `CODER_TOKEN`”
+
+Three different things:
+
+| What | Survives a normal redeploy? |
+|------|-----------------------------|
+| **Browser session** (you’re “logged in” in the tab) | Often **no** — you may need to sign in again. That’s normal. |
+| **Your Coder user + API tokens stored by Coder** | **Yes** — they live in the **`coder-data` Docker volume** (`/home/coder/.coder` in the container). Redeploy replaces the **container**, not that volume, unless you delete the app/volumes on purpose. |
+| **`CODER_TOKEN` in Coolify** | **Yes** — Coolify keeps environment/secrets. Saving `CODER_TOKEN` then redeploying only **injects** it into the **new** container; it does not delete the secret from Coolify. |
+
+So: **create the API token once**, copy the string into a password manager, paste it into Coolify as `CODER_TOKEN`, **save**, then **redeploy**. After redeploy, sign in to the UI again if the browser session dropped; the **same** token still works for post-deploy and is still listed under **Tokens** in Coder until you revoke it.
+
+**First redeploy after adding `CODER_TOKEN`:** post-deploy on *that* deploy may still run before you’re “logged in” in the browser — that’s fine. Post-deploy only needs the **env var** `CODER_TOKEN`, not your browser session.
+
+If **everything** resets (setup wizard again, no users), the **`coder-data` volume was removed** — avoid “delete volumes” / full app delete; keep the named volume that Compose defines for Coder.
+
 ## What runs where
 
 | Step                     | Where it runs         | How |
