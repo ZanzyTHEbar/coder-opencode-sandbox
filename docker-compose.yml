@@ -4,6 +4,10 @@
 #   ./coder-deployment → /deploy (for post-deploy.sh)
 #
 # Coolify: build-pack Docker Compose, Base directory: . (repo root, leave empty if Coolify defaults to root).
+#
+# IMPORTANT (Coolify): Without an explicit volume `name:`, Docker Compose names volumes from the *project*
+# name, which Coolify may change each deploy → a NEW empty volume every time → admin + DB + tokens "wiped".
+# We set a stable name via CODER_DATA_VOLUME_NAME (set once per app in Coolify if you run multiple Coders on one host).
 
 services:
   coder:
@@ -45,7 +49,10 @@ services:
       - coolify
 
 volumes:
-  coder-data: {}
+  coder-data:
+    driver: local
+    # Stable across redeploys; override in Coolify if this host runs more than one Coder from this compose.
+    name: ${CODER_DATA_VOLUME_NAME:-coder_opencode_sandbox_server_data}
 
 networks:
   coolify:
