@@ -18,7 +18,7 @@ Per-user, isolated OpenCode sandboxes behind OIDC. Users log in via Authentik an
 | `image/` | Dockerfile for the sandbox image (Linux + OpenCode + Coder agent); built by CI to GHCR. |
 | `coder-deployment/` | `.env.example`, `post-deploy.sh`, [README](coder-deployment/README.md) (Compose lives at repo root). |
 | `scripts/` | [bootstrap-template.sh](scripts/bootstrap-template.sh) (register template in Coder), [create_authentik_oidc_coder.py](scripts/create_authentik_oidc_coder.py) (Authentik OIDC). |
-| `docs/` | Operator and user guides; [E2E_AUTOMATION](docs/E2E_AUTOMATION.md), Authentik OIDC, [BACKUP](docs/BACKUP.md), [WILDCARD_APP_URLS](docs/WILDCARD_APP_URLS.md), [IMPROVEMENTS](docs/IMPROVEMENTS.md). |
+| `docs/` | Operator and user guides; [E2E_AUTOMATION](docs/E2E_AUTOMATION.md), [Coder official deployment parity](docs/CODER_OFFICIAL_DEPLOYMENT.md), Authentik OIDC, [BACKUP](docs/BACKUP.md), [WILDCARD_APP_URLS](docs/WILDCARD_APP_URLS.md), [IMPROVEMENTS](docs/IMPROVEMENTS.md). |
 | `VERSION` | Template version (e.g. 1.0.0); see OPERATOR §9. |
 
 ## Pre-built image (GHCR)
@@ -27,7 +27,7 @@ A public image is built and published via [GitHub Actions](.github/workflows/bui
 
 ## Quick start (operators)
 
-1. Deploy Coder and configure OIDC (Authentik). See [docs/OPERATOR.md](docs/OPERATOR.md) and [docs/authentik/OIDC_SETUP.md](docs/authentik/OIDC_SETUP.md).
+1. Deploy Coder and configure OIDC (Authentik). See [docs/OPERATOR.md](docs/OPERATOR.md), [docs/CODER_OFFICIAL_DEPLOYMENT.md](docs/CODER_OFFICIAL_DEPLOYMENT.md) (upstream `compose.yaml` parity), and [docs/authentik/OIDC_SETUP.md](docs/authentik/OIDC_SETUP.md).
 2. Image is built by CI to GHCR; the template defaults to it. No local build needed.
 3. Register the template: Coolify post-deploy `sh /deploy/post-deploy.sh` with base directory **`.`** (see [docs/COOLIFY_E2E.md](docs/COOLIFY_E2E.md)), or run `./scripts/bootstrap-template.sh` manually.
 4. Users create a workspace from the template and use the **OpenCode** app and **Terminal**. See [docs/USER.md](docs/USER.md).

@@ -16,7 +16,7 @@ No local build needed. After the first workflow run, set the package to **Public
 
 ## 2. Deploy Coder and configure Authentik
 
-- Deploy from repo root [docker-compose.yml](docker-compose.yml) (`docker compose up` locally), or Coolify with **Base directory** **`.`** (repo root) so `template/` and `coder-deployment/` bind-mount correctly.
+- Deploy from repo root [docker-compose.yml](docker-compose.yml) (`docker compose up` locally), or Coolify with **Base directory** **`.`** (repo root) so `template/` and `coder-deployment/` bind-mount correctly. The stack includes a **dedicated Postgres** service — set **`POSTGRES_PASSWORD`** (and optional **`POSTGRES_USER`** / **`POSTGRES_DB`**) for production; see [docs/COOLIFY_E2E.md](docs/COOLIFY_E2E.md).
 - Set **CODER_ACCESS_URL** and OIDC env vars; see [docs/authentik/OIDC_SETUP.md](docs/authentik/OIDC_SETUP.md). Run [scripts/create_authentik_oidc_coder.py](scripts/create_authentik_oidc_coder.py) once if using Authentik.
 - Ensure Coder's provisioner can reach Docker (socket or DOCKER_HOST).
 

@@ -3,7 +3,10 @@
 ## 1. Deploy Coder
 
 - Use the reference [docker-compose.yml](../docker-compose.yml) at the **repository root** (run `docker compose up` from the repo root so `./template` and `./coder-deployment` mount correctly), or deploy Coder on Kubernetes per [Coder docs](https://coder.com/docs/install).
-- Set **CODER_ACCESS_URL** to your public URL (e.g. `https://dev.example.com`). Coder must be reachable at this URL and able to reach your OIDC issuer (Authentik).
+- **Upstream parity:** This compose follows [Coder’s official `compose.yaml`](https://github.com/coder/coder/blob/main/compose.yaml) for Postgres wiring, health checks, and Docker provisioner basics. See [CODER_OFFICIAL_DEPLOYMENT.md](CODER_OFFICIAL_DEPLOYMENT.md) for a diff table (ports, `coolify` network, OIDC, bind mounts) and **Docker socket `group_add`** if you hit permission errors.
+- **Database:** The reference compose runs a **dedicated PostgreSQL** service and sets **`CODER_PG_CONNECTION_URL`** (not Coder’s built-in embedded Postgres). Persist the **`postgres-data`** volume; set **`POSTGRES_PASSWORD`** (and optional **`POSTGRES_USER`** / **`POSTGRES_DB`**) via env or secrets. See [COOLIFY_E2E.md](COOLIFY_E2E.md) § *Where Coder stores data*.
+- **Coolify network:** The file uses **`networks: coolify` (external)**. Ensure that network exists on the Docker host (`docker network create coolify`) or that Coolify created it, or adjust networking per [CODER_OFFICIAL_DEPLOYMENT.md](CODER_OFFICIAL_DEPLOYMENT.md).
+- Set **CODER_ACCESS_URL** to your public URL (e.g. `https://dev.example.com`). It must be reachable by users and workspaces — not `localhost` for non-local templates ([Coder Docker install](https://coder.com/docs/install/docker)).
 
 ## 2. Configure OIDC (Authentik)
 
@@ -47,7 +50,7 @@ Set this as the template variable **sandbox_image**. After the first workflow ru
 
 ## 5. Create/update the template in Coder (e2e via Coolify)
 
-- **Coolify:** Set **Post-deployment command** to `/deploy/post-deploy.sh` and set **CODER_TOKEN** in the app env. Every deploy will run the script inside the Coder container and push the template. See [COOLIFY_E2E.md](COOLIFY_E2E.md).
+- **Coolify:** Set **Post-deployment command** to `sh /deploy/post-deploy.sh` and set **CODER_TOKEN** in the app env. Every deploy will run the script inside the Coder container and push the template. See [COOLIFY_E2E.md](COOLIFY_E2E.md).
 - **Manual:** Run `CODER_URL=https://coder.example.com CODER_TOKEN=<token> ./scripts/bootstrap-template.sh` from the repo root. Override image with `SANDBOX_IMAGE=... ./scripts/bootstrap-template.sh` if needed.
 
 ## 6. Persistence and lifecycle

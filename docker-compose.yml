@@ -1,61 +1,86 @@
 # Reference Coder deployment (Docker Compose).
+#
+# Upstream reference (keep in sync when bumping Coder / Postgres patterns):
+#   https://github.com/coder/coder/blob/main/compose.yaml
+# Docs: https://coder.com/docs/install/docker
+#
 # Repo root is the Compose project directory so bind mounts resolve:
 #   ./template → /templates (for coder templates push)
 #   ./coder-deployment → /deploy (for post-deploy.sh)
 #
-# Coolify: build-pack Docker Compose, Base directory: . (repo root, leave empty if Coolify defaults to root).
+# Coolify: build-pack Docker Compose, Base directory: . (repo root).
 #
-# Persistence: built-in Postgres uses ~/.config/coderv2/postgres (Coder v2), NOT ~/.coder.
-# Mount the volume at /home/coder/.config/coderv2 so data lives on the named volume.
-# Do NOT mount only .../.config/coder — Coder must create .../coderv2; a sibling mount can make
-# mkdir /home/coder/.config/coderv2 fail with "permission denied" (see coder/coder#4970).
-# Coolify: explicit volume name: + CODER_DATA_VOLUME_NAME if multiple Coders/host.
+# This stack adds: dedicated PostgreSQL (same pattern as upstream), external `coolify` network,
+# OIDC/token env for Authentik, HTTP on 4099 (upstream defaults to 7080 — see docs/CODER_OFFICIAL_DEPLOYMENT.md).
 
 services:
-  coder:
-    image: ghcr.io/coder/coder:latest
-    # Do not set command: server — the image ENTRYPOINT is already ["/opt/coder", "server"].
-    # Adding command: server becomes "/opt/coder server server" and fails with "unrecognized subcommand server".
+  database:
+    # Minimum supported major version is 13 (Coder docs). Upstream uses postgres:17.
+    image: postgres:17
     environment:
+      POSTGRES_USER: ${POSTGRES_USER:-coder}
+      # Override in production (Coolify secret); default is dev-only.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      POSTGRES_DB: ${POSTGRES_DB:-coder}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-coder} -d ${POSTGRES_DB:-coder}",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - coolify
+
+  coder:
+    image: ghcr.io/coder/coder:${CODER_VERSION:-latest}
+    depends_on:
+      database:
+        condition: service_healthy
+    # Do not set command: server — image ENTRYPOINT is ["/opt/coder", "server"].
+    environment:
+      # Same shape as upstream compose.yaml (host defaults to port 5432).
+      CODER_PG_CONNECTION_URL: "postgresql://${POSTGRES_USER:-coder}:${POSTGRES_PASSWORD:-changeme}@database/${POSTGRES_DB:-coder}?sslmode=disable"
+      # Must be a URL workspaces and users can reach (not localhost for non-local templates). Set in Coolify / .env.
       CODER_ACCESS_URL: ${CODER_ACCESS_URL:-https://dev.example.com}
       CODER_HTTP_ADDRESS: "0.0.0.0:4099"
-      # API token lifetimes — Coder defaults are 168h (7d) for default + admin-created tokens.
-      # Raise these so automation tokens (e.g. Coolify CODER_TOKEN for post-deploy) can last longer.
-      # See docs/COOLIFY_E2E.md § "API tokens and 7-day expiry".
       CODER_DEFAULT_TOKEN_LIFETIME: ${CODER_DEFAULT_TOKEN_LIFETIME:-8760h}
       CODER_MAX_ADMIN_TOKEN_LIFETIME: ${CODER_MAX_ADMIN_TOKEN_LIFETIME:-8760h}
-      # OIDC (Authentik) — set these for your IdP.
-      CODER_OIDC_ISSUER_URL: ${CODER_OIDC_ISSUER_URL}
-      CODER_OIDC_CLIENT_ID: ${CODER_OIDC_CLIENT_ID}
-      CODER_OIDC_CLIENT_SECRET: ${CODER_OIDC_CLIENT_SECRET}
+      CODER_OIDC_ISSUER_URL: ${CODER_OIDC_ISSUER_URL:-}
+      CODER_OIDC_CLIENT_ID: ${CODER_OIDC_CLIENT_ID:-}
+      CODER_OIDC_CLIENT_SECRET: ${CODER_OIDC_CLIENT_SECRET:-}
       CODER_OIDC_EMAIL_FIELD: ${CODER_OIDC_EMAIL_FIELD:-email}
       CODER_OIDC_USERNAME_FIELD: ${CODER_OIDC_USERNAME_FIELD:-preferred_username}
-      CODER_DISABLE_PASSWORD_AUTH: "true"
-      # Provisioner needs Docker to create workspace containers.
+      # Quoted so Compose always passes a string to Coder (bootstrap may set false in .env).
+      CODER_DISABLE_PASSWORD_AUTH: "${CODER_DISABLE_PASSWORD_AUTH:-true}"
       CODER_PROVISIONER_DAEMON: "true"
       DOCKER_HOST: "unix:///var/run/docker.sock"
-      # For post-deploy template push (Coolify): set CODER_URL + CODER_TOKEN in Coolify env.
       CODER_URL: ${CODER_URL:-http://127.0.0.1:4099}
       CODER_TOKEN: ${CODER_TOKEN:-}
-      # Must appear here so Coolify injects it into the container for post-deploy.sh (same default as post-deploy.sh).
       SANDBOX_IMAGE: ${SANDBOX_IMAGE:-ghcr.io/zanzythebar/coder-opencode-sandbox:latest}
     volumes:
-      # Embedded Postgres: ~/.config/coderv2/postgres (Coder v2)
-      - coder-data:/home/coder/.config/coderv2
       - /var/run/docker.sock:/var/run/docker.sock
       - ./template:/templates:ro
       - ./coder-deployment:/deploy:ro
+    # Coder runs non-root; if the provisioner gets "permission denied" on docker.sock, set
+    # DOCKER_GID from: getent group docker | cut -d: -f3  (see docs/CODER_OFFICIAL_DEPLOYMENT.md)
+    # group_add:
+    #   - "${DOCKER_GID}"
     ports:
-      - "4099:4099"
+      - "${CODER_HOST_PORT:-4099}:4099"
     restart: unless-stopped
     networks:
       - coolify
 
 volumes:
-  coder-data:
+  postgres-data:
     driver: local
-    # Stable across redeploys; override in Coolify if this host runs more than one Coder from this compose.
-    name: ${CODER_DATA_VOLUME_NAME:-coder_opencode_sandbox_server_data}
+    name: ${POSTGRES_DATA_VOLUME_NAME:-coder_opencode_sandbox_postgres_data}
 
 networks:
   coolify:

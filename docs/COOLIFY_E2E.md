@@ -2,6 +2,8 @@
 
 End-to-end automation runs on **your Coolify infrastructure** using a post-deployment command. No GitHub Actions (or other public CI) are used for template registration.
 
+**Upstream Coder deployment:** Root [`docker-compose.yml`](../docker-compose.yml) is aligned with [Coder’s official `compose.yaml`](https://github.com/coder/coder/blob/main/compose.yaml) (Postgres, health checks, Docker socket). See [CODER_OFFICIAL_DEPLOYMENT.md](CODER_OFFICIAL_DEPLOYMENT.md) for ports (`4099` vs upstream `7080`), **`coolify` network**, optional **`DOCKER_GID` / `group_add`**, and **`CODER_VERSION`** pinning.
+
 ## Recommended: Compose at repo root
 
 Set Coolify **Base directory** to **`.`** (repository root — leave empty if Coolify defaults to root). The deployment checkout then includes **`template/`** and **`coder-deployment/`**, so the root [`docker-compose.yml`](../docker-compose.yml) can bind-mount:
@@ -35,12 +37,16 @@ If **Base directory** is `coder-deployment`, Coolify’s deployment root is **on
 Set in Coolify for the Coder app:
 
 - **Coder and OIDC:** `CODER_ACCESS_URL`, `CODER_OIDC_ISSUER_URL`, `CODER_OIDC_CLIENT_ID`, `CODER_OIDC_CLIENT_SECRET`, `CODER_OIDC_EMAIL_FIELD`, `CODER_OIDC_USERNAME_FIELD`, `CODER_DISABLE_PASSWORD_AUTH`, `CODER_PROVISIONER_DAEMON`, `DOCKER_HOST` (and any others from `coder-deployment/.env.example`).
+- **PostgreSQL (dedicated service):** Root [`docker-compose.yml`](../docker-compose.yml) runs a **`database`** service (`postgres:17-alpine`) and sets **`CODER_PG_CONNECTION_URL`** for the Coder service. Set a strong secret in production:
+  - **`POSTGRES_PASSWORD`** (required in practice; compose default `changeme` is dev-only).
+  - Optional: **`POSTGRES_USER`**, **`POSTGRES_DB`** (defaults: `coder` / `coder`).
+  - Optional: **`POSTGRES_DATA_VOLUME_NAME`** — host Docker volume name for Postgres data (default: `coder_opencode_sandbox_postgres_data`). Use a **unique** name per Coder app if several stacks share one Docker host. See **§ Where Coder stores data** below.
 - **For post-deploy template push:**
   - **CODER_URL** — `http://127.0.0.1:4099` (Coder inside the same container).
   - **CODER_TOKEN** — A Coder **API token** (not a browser session cookie). Create after first login; store in Coolify as a secret. See **§ API tokens and 7-day expiry** below if the UI only allows short-lived tokens.
 - **SANDBOX_IMAGE** (optional) — Override the workspace sandbox image (default in compose: `ghcr.io/zanzythebar/coder-opencode-sandbox:latest`).
 - **Token lifetime (optional but recommended for automation)** — Root [`docker-compose.yml`](../docker-compose.yml) sets **`CODER_DEFAULT_TOKEN_LIFETIME`** and **`CODER_MAX_ADMIN_TOKEN_LIFETIME`** (default `8760h` ≈ one year) so tokens you create are allowed to last longer than Coder’s stock **7-day** default. Override in Coolify if your policy needs different values.
-- **`CODER_DATA_VOLUME_NAME` (optional)** — Docker volume name for Coder v2 data (`/home/coder/.config/coderv2`, embedded Postgres under `.../postgres`). Default: `coder_opencode_sandbox_server_data`. Set a **unique** value per Coder app if several instances share one Docker host. See **§ Where Coder stores data** below.
+- **Coder image / port (optional)** — **`CODER_VERSION`** pins `ghcr.io/coder/coder:<tag>` (default `latest`). **`CODER_HOST_PORT`** maps the host port to container **4099** (upstream’s [official compose](https://github.com/coder/coder/blob/main/compose.yaml) uses **7080**). **`DOCKER_GID`** + uncommented **`group_add`** in compose if Docker workspaces fail with socket permission errors — see [CODER_OFFICIAL_DEPLOYMENT.md](CODER_OFFICIAL_DEPLOYMENT.md).
 
 ### API tokens and 7-day expiry
 
@@ -108,27 +114,15 @@ After that, every deploy will refresh the template automatically. For **future l
 
 **Deadlock:** If you set `CODER_DISABLE_PASSWORD_AUTH=true` before creating the first user, the setup screen may not let you create an account. Use password once on the setup screen (step 2), then switch to OIDC-only on the login page if desired.
 
-#### Where Coder stores data (embedded Postgres)
+#### Where Coder stores data (dedicated PostgreSQL)
 
-Coder v2 with **built-in PostgreSQL** uses **`~/.config/coderv2/postgres`** (see logs: `Using built-in PostgreSQL (/home/coder/.config/coderv2/postgres)`). Mount the named volume at:
+Application state (users, workspaces metadata, API tokens registry in Coder’s DB) lives in the **`database`** service’s data directory: the named volume **`postgres-data`** → `/var/lib/postgresql/data` (override volume **name** with **`POSTGRES_DATA_VOLUME_NAME`** if you need a stable host-side name across redeploys).
 
-```yaml
-coder-data:/home/coder/.config/coderv2
-```
+The Coder **container** does **not** use embedded Postgres under `~/.config/coderv2` in this stack — **`CODER_PG_CONNECTION_URL`** points at `database:5432`.
 
-**Do not** mount only `.../.config/coder` or `.../.coder` — wrong paths lose data on redeploy **or** block creation of `coderv2` (see below).
+**Passwords with special characters:** If **`POSTGRES_PASSWORD`** contains `@`, `:`, `/`, etc., URL-encode it in **`CODER_PG_CONNECTION_URL`** or choose a password that is safe in a PostgreSQL connection URI (Coolify secrets).
 
-Use an explicit volume **`name:`** (and optional `CODER_DATA_VOLUME_NAME`) so Docker reuses the same volume. After fixing the mount, you may need **one more** first-time setup if prior DB lived on the wrong path.
-
-**`mkdir /home/coder/.config/coderv2: permission denied`:** Often caused by mounting a volume **only** at `.../.config/coder`, so the `coder` user cannot create the sibling directory `coderv2` under `.config` ([coder/coder#4970](https://github.com/coder/coder/issues/4970)). **Fix:** mount at **`.../.config/coderv2`** as above (or mount all of **`.../.config`** on one volume).
-
-If it still fails, the named volume may be **root-owned**; on the Docker host, fix ownership (UID/GID of user `coder` in the image is commonly `1000`):
-
-```bash
-docker run --rm -v coder_opencode_sandbox_server_data:/data alpine chown -R 1000:1000 /data
-```
-
-(Replace volume name with your `CODER_DATA_VOLUME_NAME` or Coolify-generated name.)
+**Migrating from embedded Postgres:** If you previously ran Coder with built-in DB on a volume under `/home/coder/.config/coderv2`, switching to external Postgres starts with an **empty** Coder DB unless you **dump/restore** from the old cluster. Plan a maintenance window: `pg_dump` from embedded (or copy data dir with compatible Postgres major version), restore into the new `database` service, then redeploy with **`CODER_PG_CONNECTION_URL`** only.
 
 **Coolify:** If extra bind mounts in the UI **overwrite** the service `volumes` list, persistence can break ([coollabsio/coolify#5034](https://github.com/coollabsio/coolify/issues/5034)).
 
@@ -138,7 +132,7 @@ docker run --rm -v coder_opencode_sandbox_server_data:/data alpine chown -R 1000
 |------|--------|
 | **Browser session** | May reset after redeploy — normal. |
 | **`CODER_TOKEN` in Coolify** | Stored by Coolify; injected into the new container. |
-| **Users + API tokens in Coder** | Stored in embedded Postgres under **`/home/coder/.config/coderv2`** — keep that path on a persistent volume. |
+| **Users + API tokens in Coder** | Stored in the **Postgres** service — keep the **`postgres-data`** volume (see **§ Where Coder stores data**). |
 
 Post-deploy only needs the **`CODER_TOKEN` env var** in the container, not an open browser tab.
 
@@ -155,9 +149,9 @@ Post-deploy only needs the **`CODER_TOKEN` env var** in the container, not an op
 
 ### Setup wizard / admin / tokens reset on every redeploy
 
-1. **Wrong mount path** — Use **`/home/coder/.config/coderv2`** for Coder v2 embedded Postgres (see **§ Where Coder stores data**).
-2. **`permission denied` on `mkdir .../coderv2`** — Usually a bad partial mount under `.config`; fix mount path or `chown` the volume (same section).
-3. **Coolify:** If the **generated** compose drops the data volume when bind mounts are merged, see [coollabsio/coolify#5034](https://github.com/coollabsio/coolify/issues/5034).
+1. **Postgres volume missing or reset** — Ensure the **`database`** service keeps the **`postgres-data`** named volume (see **§ Where Coder stores data**). **`CODER_PG_CONNECTION_URL`** must match **`POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB`**.
+2. **Empty DB after switching from embedded Postgres** — Expected unless you migrated data; see migration note in **§ Where Coder stores data**.
+3. **Coolify:** If the **generated** compose drops volumes when bind mounts are merged, see [coollabsio/coolify#5034](https://github.com/coollabsio/coolify/issues/5034).
 
 ### No templates at all
 
