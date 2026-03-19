@@ -1,0 +1,30 @@
+# Reference Coder deployment (Docker Compose).
+# Use this as a starting point; adjust CODER_* and OIDC env vars for your environment.
+# See docs/OPERATOR.md and docs/authentik/OIDC_SETUP.md.
+
+services:
+  coder:
+    image: ghcr.io/coder/coder:latest
+    command: server
+    environment:
+      CODER_ACCESS_URL: ${CODER_ACCESS_URL:-https://dev.example.com}
+      CODER_HTTP_ADDRESS: "0.0.0.0:8080"
+      # OIDC (Authentik) — set these for your IdP.
+      CODER_OIDC_ISSUER_URL: ${CODER_OIDC_ISSUER_URL}
+      CODER_OIDC_CLIENT_ID: ${CODER_OIDC_CLIENT_ID}
+      CODER_OIDC_CLIENT_SECRET: ${CODER_OIDC_CLIENT_SECRET}
+      CODER_OIDC_EMAIL_FIELD: ${CODER_OIDC_EMAIL_FIELD:-email}
+      CODER_OIDC_USERNAME_FIELD: ${CODER_OIDC_USERNAME_FIELD:-preferred_username}
+      CODER_DISABLE_PASSWORD_AUTH: "true"
+      # Provisioner needs Docker to create workspace containers.
+      CODER_PROVISIONER_DAEMON: "true"
+      DOCKER_HOST: "unix:///var/run/docker.sock"
+    volumes:
+      - coder-data:/home/coder/.coder
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+volumes:
+  coder-data: {}
