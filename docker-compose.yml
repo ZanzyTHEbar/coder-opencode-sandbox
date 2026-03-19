@@ -5,10 +5,11 @@
 #
 # Coolify: build-pack Docker Compose, Base directory: . (repo root, leave empty if Coolify defaults to root).
 #
-# Persistence: embedded PostgreSQL + server state live under ~/.config/coder (see Coder docs / issues), i.e.
-# /home/coder/.config/coder — NOT /home/coder/.coder. Mounting the wrong path stores data on the container
-# filesystem and it disappears on every redeploy.
-# Coolify: explicit volume `name:` avoids some compose merge issues; CODER_DATA_VOLUME_NAME if multiple Coders/host.
+# Persistence: built-in Postgres uses ~/.config/coderv2/postgres (Coder v2), NOT ~/.coder.
+# Mount the volume at /home/coder/.config/coderv2 so data lives on the named volume.
+# Do NOT mount only .../.config/coder — Coder must create .../coderv2; a sibling mount can make
+# mkdir /home/coder/.config/coderv2 fail with "permission denied" (see coder/coder#4970).
+# Coolify: explicit volume name: + CODER_DATA_VOLUME_NAME if multiple Coders/host.
 
 services:
   coder:
@@ -39,8 +40,8 @@ services:
       # Must appear here so Coolify injects it into the container for post-deploy.sh (same default as post-deploy.sh).
       SANDBOX_IMAGE: ${SANDBOX_IMAGE:-ghcr.io/zanzythebar/coder-opencode-sandbox:latest}
     volumes:
-      # Embedded Postgres + API state: ~/.config/coder (NOT ~/.coder)
-      - coder-data:/home/coder/.config/coder
+      # Embedded Postgres: ~/.config/coderv2/postgres (Coder v2)
+      - coder-data:/home/coder/.config/coderv2
       - /var/run/docker.sock:/var/run/docker.sock
       - ./template:/templates:ro
       - ./coder-deployment:/deploy:ro
