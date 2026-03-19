@@ -7,9 +7,9 @@ variable "docker_socket" {
   type        = string
 }
 
-# Sandbox image: build from image/ and push to your registry, then set this.
+# Sandbox image: our GHCR image (built by .github/workflows/build-push-image.yml). Override for custom registry.
 variable "sandbox_image" {
-  default     = "opencode-sandbox:latest"
-  description = "Docker image for the OpenCode sandbox (Linux + Coder agent + OpenCode server)."
+  default     = "ghcr.io/zanzythebar/coder-opencode-sandbox:latest"
+  description = "Docker image for the OpenCode sandbox (Linux + Coder agent + OpenCode server). Default: repo's GHCR image."
   type        = string
 }
