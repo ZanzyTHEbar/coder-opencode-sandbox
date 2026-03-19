@@ -163,6 +163,8 @@ Post-deploy only needs the **`CODER_TOKEN` env var** in the container, not an op
    `CODER_URL=https://<your-coder-host> CODER_SESSION_TOKEN=<token> coder templates push opencode-sandbox -d ./template --variable sandbox_image=ghcr.io/zanzythebar/coder-opencode-sandbox:latest -y`  
    (Use your real URL, token, and image.)
 
+6. **Stale `/templates` in the Coder container** — If `grep chown /templates/main.tf` inside the container does not show the latest commit, Coolify’s deployment checkout may be behind `main`. **Redeploy** the app (pull latest Git), or push using a **fresh tree from GitHub** (same idea as the fetch fallback in §3): extract `main.tar.gz`, set `TEMPLATE_DIR` to `…/template`, then `sh /deploy/post-deploy.sh`.
+
 ### OIDC / Authentik not working at all
 
 - **Only GitHub and Email/Password on the first-time setup screen** — This is expected. Coder’s “create your first admin” page does not show OIDC. Create the first user with **Email and Password**, then use the **login** page (after logging out or in another session); OIDC appears there. See [authentik/OIDC_SETUP.md](authentik/OIDC_SETUP.md).
