@@ -67,10 +67,10 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./template:/templates:ro
       - ./coder-deployment:/deploy:ro
-    # Coder runs non-root; if the provisioner gets "permission denied" on docker.sock, set
-    # DOCKER_GID from: getent group docker | cut -d: -f3  (see docs/CODER_OFFICIAL_DEPLOYMENT.md)
-    # group_add:
-    #   - "${DOCKER_GID}"
+    # Coder runs non-root; `coder templates push` runs Terraform against docker.sock during import — required.
+    # Set DOCKER_GID to match the host: getent group docker | cut -d: -f3 (see docs/CODER_OFFICIAL_DEPLOYMENT.md).
+    group_add:
+      - "${DOCKER_GID:-996}"
     ports:
       - "${CODER_HOST_PORT:-4099}:4099"
     restart: unless-stopped

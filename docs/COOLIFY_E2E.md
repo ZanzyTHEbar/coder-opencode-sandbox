@@ -156,9 +156,10 @@ Post-deploy only needs the **`CODER_TOKEN` env var** in the container, not an op
 ### No templates at all
 
 1. **Coolify post-deploy logs** — Look for `CODER_TOKEN not set` (expected until you add a token), `FATAL: no readable /templates/main.tf` (wrong base directory / mount), or `coder templates push` errors (permissions, API down).
-2. **`CODER_TOKEN`** — Must be a valid API token for a user who can manage templates. If OIDC never worked, you never created one; see **Deadlock** in §4.
-3. **Base directory** — Must be repo root (`.`) so `/templates` contains your Terraform template. If you see the FATAL line above, fix base directory and redeploy.
-4. **Manual push (bypass post-deploy)** — From any machine with `coder` CLI:  
+2. **`permission denied` on `/var/run/docker.sock` during `templates push`** — Template import runs Terraform against Docker; the Coder container must have **`group_add`** for the host `docker` group (**`DOCKER_GID`**). Without it, push fails in a loop and the UI shows **no templates**. Fix: set **`DOCKER_GID`** from `getent group docker | cut -d: -f3` on the Docker host (see root `docker-compose.yml` and [CODER_OFFICIAL_DEPLOYMENT.md](CODER_OFFICIAL_DEPLOYMENT.md)), redeploy, re-run post-deploy.
+3. **`CODER_TOKEN`** — Must be a valid API token for a user who can manage templates. Export **`CODER_SESSION_TOKEN`** for the CLI (`post-deploy.sh` does this). If OIDC never worked, you never created one; see **Deadlock** in §4.
+4. **Base directory** — Must be repo root (`.`) so `/templates` contains your Terraform template. If you see the FATAL line above, fix base directory and redeploy.
+5. **Manual push (bypass post-deploy)** — From any machine with `coder` CLI:  
    `CODER_URL=https://<your-coder-host> CODER_SESSION_TOKEN=<token> coder templates push opencode-sandbox -d ./template --variable sandbox_image=ghcr.io/zanzythebar/coder-opencode-sandbox:latest -y`  
    (Use your real URL, token, and image.)
 
