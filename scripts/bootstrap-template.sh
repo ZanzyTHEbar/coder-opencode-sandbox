@@ -13,7 +13,7 @@ SCRIPT_DIR="${BASH_SOURCE%/*}"
 REPO_ROOT="${SCRIPT_DIR}/.."
 TEMPLATE_NAME="opencode-sandbox"
 TEMPLATE_DIR="${REPO_ROOT}/template"
-# Must match template/variables.tf default (GHCR image built by .github/workflows/build-push-image.yml)
+# Must match template/main.tf variable sandbox_image default (GHCR image built by .github/workflows/build-push-image.yml)
 SANDBOX_IMAGE="${SANDBOX_IMAGE:-ghcr.io/zanzythebar/coder-opencode-sandbox:latest}"
 
 cd "$REPO_ROOT"

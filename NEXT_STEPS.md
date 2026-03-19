@@ -6,7 +6,7 @@ Follow these in order to go from zero to a working OpenCode sandbox on Coder. Th
 
 ## 1. Image (automated by CI)
 
-On every push to `main`, [GitHub Actions](.github/workflows/build-push-image.yml) builds [image/Dockerfile](image/Dockerfile) and pushes to GHCR. The template [template/variables.tf](template/variables.tf) defaults **sandbox_image** to that image:
+On every push to `main`, [GitHub Actions](.github/workflows/build-push-image.yml) builds [image/Dockerfile](image/Dockerfile) and pushes to GHCR. The template [template/main.tf](template/main.tf) defaults **sandbox_image** to that image:
 
 ```text
 ghcr.io/zanzythebar/coder-opencode-sandbox:latest

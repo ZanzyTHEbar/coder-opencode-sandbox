@@ -9,6 +9,26 @@ terraform {
   }
 }
 
+# Variables (co-located with root module so editors/terraform-ls resolve them when this file is the focus).
+# Reserved for future use: per-template Docker host override.
+variable "docker_socket" {
+  default     = ""
+  description = "Reserved. Docker is configured via Coder deployment (DOCKER_HOST). Leave empty."
+  type        = string
+}
+
+variable "sandbox_image" {
+  default     = "ghcr.io/zanzythebar/coder-opencode-sandbox:latest"
+  description = "Docker image for the OpenCode sandbox (Linux + Coder agent + OpenCode server). Default: repo's GHCR image."
+  type        = string
+}
+
+variable "workspace_docker_network" {
+  default     = "coolify"
+  description = "Docker network name for workspace containers (e.g. coolify). Matches root docker-compose external network so agents reach CODER_ACCESS_URL. Set to \"\" for default bridge only."
+  type        = string
+}
+
 # ------------------------------------------------------------------------------
 # Data sources
 # ------------------------------------------------------------------------------
