@@ -70,12 +70,30 @@ locals {
   # Must run *before* the rest of coder_agent.main.init_script (agent touches $HOME early).
   # Run as root (see docker_container.user): named volumes are root:root — sudo can still fail in some
   # Docker/seccomp setups; real root avoids that. Coder's init then continues (agent runs as non-root).
+  # Writes /home/coder/.coder-debug/bootstrap.log for evidence-based debugging (see docs/DEBUG_WORKSPACE_VOLUME.md).
   workspace_volume_bootstrap = <<-EOT
 set -e
 export HOME=/home/coder
+DBG=/home/coder/.coder-debug
+mkdir -p "$DBG"
+{
+  echo "=== bootstrap begin $(date -Iseconds 2>/dev/null || date) ==="
+  echo "uid=$(id -u) gid=$(id -g) user=$(id -un 2>/dev/null || echo '?')"
+  echo "--- getent passwd coder ---"
+  getent passwd coder || echo "MISSING: no passwd entry for coder"
+  echo "--- ls -la /home/coder ---"
+  ls -la /home/coder 2>&1 || true
+  echo "--- mounts touching /home ---"
+  grep -E ' /home|/home/coder' /proc/mounts 2>/dev/null || cat /proc/mounts | head -30
+  echo "--- stat /home/coder ---"
+  stat /home/coder 2>&1 || true
+} >>"$DBG/bootstrap.log" 2>&1
 chown -R coder:coder /home/coder
 mkdir -p /home/coder/workspace
 chown -R coder:coder /home/coder/workspace
+{
+  echo "=== bootstrap ok $(date -Iseconds 2>/dev/null || date) ==="
+} >>"$DBG/bootstrap.log" 2>&1
 
 EOT
 }
@@ -132,9 +150,33 @@ resource "coder_agent" "main" {
   startup_script = <<-EOT
     set -e
     export HOME=/home/coder
+    # /tmp always writable — if $HOME is root-owned, .coder-debug cannot be created; still get evidence here.
+    TMPLOG=/tmp/coder-opencode-startup.log
+    DBG=/home/coder/.coder-debug
+    set +e
+    {
+      echo "=== startup begin $(date -Iseconds 2>/dev/null || date) ==="
+      echo "uid=$(id -u) gid=$(id -g) user=$(id -un 2>/dev/null || echo '?')"
+      echo "--- getent passwd (current) ---"
+      getent passwd "$(id -un)" 2>/dev/null || true
+      echo "--- ls -la /home /home/coder ---"
+      ls -la /home 2>&1 | head -20
+      ls -la /home/coder 2>&1 | head -60
+      if test -w "$HOME"; then echo "HOME writable: yes"; else echo "HOME writable: NO"; fi
+      echo "--- ls -ld home + workspace ---"
+      ls -ld "$HOME" "$HOME/workspace" 2>&1 || true
+    } | tee -a "$TMPLOG"
+    set -e
+    mkdir -p "$DBG" 2>>"$TMPLOG" || echo "NOTE: could not mkdir $DBG (home may be root-owned); see $TMPLOG" | tee -a "$TMPLOG"
+    if [ -w "$DBG" ]; then
+      cp -f "$TMPLOG" "$DBG/startup.log" 2>/dev/null || cat "$TMPLOG" >>"$DBG/startup.log" 2>/dev/null || true
+    fi
 
     # Ensure workspace dir exists even if .init_done was set without it (idempotent).
-    mkdir -p "$HOME/workspace"
+    if ! mkdir -p "$HOME/workspace" 2>>"$TMPLOG"; then
+      echo "FATAL: mkdir -p $HOME/workspace failed — read $TMPLOG and docs/DEBUG_WORKSPACE_VOLUME.md" | tee -a "$TMPLOG" >&2
+      exit 1
+    fi
 
     # Prepare home with defaults on first start (volume was empty).
     if [ ! -f "$HOME/.init_done" ]; then

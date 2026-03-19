@@ -7,7 +7,7 @@ Terraform template for Coder: one workspace = one container + one persistent vol
 | Name | Default | Description |
 |------|---------|-------------|
 | `docker_socket` | `""` | Reserved. Use DOCKER_HOST on the Coder deployment for remote Docker. |
-| `sandbox_image` | `opencode-sandbox:latest` | Docker image for the sandbox (build from `../image`). |
+| `sandbox_image` | `ghcr.io/.../coder-opencode-sandbox:latest` (see `main.tf`) | Docker image for the sandbox (build from `../image` or use GHCR). |
 
 ## Create template
 
@@ -23,7 +23,7 @@ Set `sandbox_image` to your built image (e.g. `opencode-sandbox:latest` or `your
 
 - Volume name: `coder-${data.coder_workspace.me.id}-home` (immutable id only).
 - Mount: `/home/coder` (read-write). All OpenCode and user state under home persists across stop/start.
-- **First start:** Docker mounts new volumes as **root**; the agent runs as **`coder`**. The startup script runs `sudo chown -R coder:coder "$HOME"` when `$HOME` is not writable so `~/workspace` can be created (image includes passwordless sudo for `coder`).
+- **First start:** Named volumes mount as **root:root** at `/home/coder`. The template sets **`user = "0:0"`** and **prepends** a bootstrap to the container **`command`** (before the agent `init_script`) so **`chown`/`mkdir`** run as **real root**; the agent then runs as **`coder`**. See **`docs/DEBUG_WORKSPACE_VOLUME.md`** if anything still fails — use **`bootstrap.log`** / **`/tmp/coder-opencode-startup.log`**, not blind `sudo` retries.
 - Lifecycle: `ignore_changes = all` on the volume so Terraform does not recreate it.
 
 ## Container name
