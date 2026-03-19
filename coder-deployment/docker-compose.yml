@@ -1,6 +1,6 @@
 # Reference Coder deployment (Docker Compose).
-# Use this as a starting point; adjust CODER_* and OIDC env vars for your environment.
-# See docs/OPERATOR.md and docs/authentik/OIDC_SETUP.md.
+# Use with Coolify: build-pack dockercompose, base-directory coder-deployment.
+# Mounts template/ and this dir so Coolify post-deploy can run template push. See docs/COOLIFY_E2E.md.
 
 services:
   coder:
@@ -19,9 +19,16 @@ services:
       # Provisioner needs Docker to create workspace containers.
       CODER_PROVISIONER_DAEMON: "true"
       DOCKER_HOST: "unix:///var/run/docker.sock"
+      # For post-deploy template push (Coolify): set CODER_URL + CODER_TOKEN in Coolify env.
+      CODER_URL: ${CODER_URL:-http://127.0.0.1:4099}
+      CODER_TOKEN: ${CODER_TOKEN:-}
     volumes:
       - coder-data:/home/coder/.coder
       - /var/run/docker.sock:/var/run/docker.sock
+      # Template dir for post-deploy "coder templates push" (relative to compose project root).
+      - ../template:/templates:ro
+      # This dir so post-deploy script is inside the container.
+      - .:/deploy:ro
     ports:
       - "4099:4099"
     restart: unless-stopped
