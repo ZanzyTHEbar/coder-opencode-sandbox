@@ -5,9 +5,10 @@
 #
 # Coolify: build-pack Docker Compose, Base directory: . (repo root, leave empty if Coolify defaults to root).
 #
-# IMPORTANT (Coolify): Without an explicit volume `name:`, Docker Compose names volumes from the *project*
-# name, which Coolify may change each deploy → a NEW empty volume every time → admin + DB + tokens "wiped".
-# We set a stable name via CODER_DATA_VOLUME_NAME (set once per app in Coolify if you run multiple Coders on one host).
+# Persistence: embedded PostgreSQL + server state live under ~/.config/coder (see Coder docs / issues), i.e.
+# /home/coder/.config/coder — NOT /home/coder/.coder. Mounting the wrong path stores data on the container
+# filesystem and it disappears on every redeploy.
+# Coolify: explicit volume `name:` avoids some compose merge issues; CODER_DATA_VOLUME_NAME if multiple Coders/host.
 
 services:
   coder:
@@ -38,7 +39,8 @@ services:
       # Must appear here so Coolify injects it into the container for post-deploy.sh (same default as post-deploy.sh).
       SANDBOX_IMAGE: ${SANDBOX_IMAGE:-ghcr.io/zanzythebar/coder-opencode-sandbox:latest}
     volumes:
-      - coder-data:/home/coder/.coder
+      # Embedded Postgres + API state: ~/.config/coder (NOT ~/.coder)
+      - coder-data:/home/coder/.config/coder
       - /var/run/docker.sock:/var/run/docker.sock
       - ./template:/templates:ro
       - ./coder-deployment:/deploy:ro

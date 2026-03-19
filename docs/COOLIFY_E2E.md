@@ -40,7 +40,7 @@ Set in Coolify for the Coder app:
   - **CODER_TOKEN** — A Coder **API token** (not a browser session cookie). Create after first login; store in Coolify as a secret. See **§ API tokens and 7-day expiry** below if the UI only allows short-lived tokens.
 - **SANDBOX_IMAGE** (optional) — Override the workspace sandbox image (default in compose: `ghcr.io/zanzythebar/coder-opencode-sandbox:latest`).
 - **Token lifetime (optional but recommended for automation)** — Root [`docker-compose.yml`](../docker-compose.yml) sets **`CODER_DEFAULT_TOKEN_LIFETIME`** and **`CODER_MAX_ADMIN_TOKEN_LIFETIME`** (default `8760h` ≈ one year) so tokens you create are allowed to last longer than Coder’s stock **7-day** default. Override in Coolify if your policy needs different values.
-- **`CODER_DATA_VOLUME_NAME` (optional)** — Docker volume name for Coder’s database (`/home/coder/.coder`). Default in compose: `coder_opencode_sandbox_server_data`. Set a **unique** value per Coder app if several instances share one Docker host. See **§ Persistent data (Coolify)** below — **required reading** so redeploys do not wipe users.
+- **`CODER_DATA_VOLUME_NAME` (optional)** — Docker volume name for Coder’s **config root** (`/home/coder/.config/coder`, embedded Postgres + server state). Default: `coder_opencode_sandbox_server_data`. Set a **unique** value per Coder app if several instances share one Docker host. See **§ Where Coder stores data** below.
 
 ### API tokens and 7-day expiry
 
@@ -108,25 +108,31 @@ After that, every deploy will refresh the template automatically. For **future l
 
 **Deadlock:** If you set `CODER_DISABLE_PASSWORD_AUTH=true` before creating the first user, the setup screen may not let you create an account. Use password once on the setup screen (step 2), then switch to OIDC-only on the login page if desired.
 
-#### Persistent data (Coolify) — why admin + tokens disappeared on redeploy
+#### Where Coder stores data (this was the real persistence bug)
 
-**Correction:** On Coolify, a **plain** Compose volume like `coder-data: {}` often gets a Docker volume name derived from the **Compose project name**. Coolify may use a **different project path or name on each deploy**, so Docker creates a **new empty volume** every time. The container then starts with a **fresh Coder DB** → setup wizard again, **all users and API tokens gone**. This matches [Coolify issues where volumes are recreated on redeploy](https://github.com/coollabsio/coolify/issues/2376).
+Coder with **embedded PostgreSQL** (no external `CODER_PG_CONNECTION_URL`) stores the database under the **config root**, typically **`~/.config/coder`**, i.e. **`/home/coder/.config/coder`** (see Coder’s server docs: built-in Postgres data lives in the config root, e.g. discussion around `~/.config/coder/postgres` in [coder/coder#2321](https://github.com/coder/coder/issues/2321)).
 
-**Fix (in this repo’s root `docker-compose.yml`):** the `coder-data` volume uses an **explicit stable `name`**, defaulting to `coder_opencode_sandbox_server_data`, overridable with **`CODER_DATA_VOLUME_NAME`** in Coolify. After you deploy with this compose:
+An older mistake was mounting a Docker volume at **`/home/coder/.coder`**. That path is **not** where embedded Postgres keeps the DB. The real data sat on the **container’s writable layer**, so **every redeploy = new container = empty DB** — admin and in-app tokens gone — **even when the volume name and UUID looked stable**, because the volume was attached to the wrong directory.
 
-1. **One more time:** complete the first-user setup and create your admin + API token.
-2. **Redeploy** — Docker should **reuse** the same named volume; users and tokens persist.
-3. If you already had data in an **old** auto-named volume, it may still exist on the host under another name (orphaned). You can inspect with `docker volume ls` on the resource server and migrate if needed.
+**Fix (current root [`docker-compose.yml`](../docker-compose.yml)):** mount persistence at:
+
+```yaml
+coder-data:/home/coder/.config/coder
+```
+
+plus an explicit volume **`name:`** (and optional `CODER_DATA_VOLUME_NAME`) so Docker/Coolify reuse the same volume. After changing the mount path, **complete first-time setup once more**; data should survive subsequent redeploys.
+
+**Coolify-specific:** If you add **extra** bind mounts in the Coolify UI, verify the **generated** compose still includes the `coder-data` volume — Coolify has had bugs where **file mounts overwrote** the `volumes` list and dropped DB persistence ([coollabsio/coolify#5034](https://github.com/coollabsio/coolify/issues/5034)). Our compose uses bind mounts for `./template` and `./coder-deployment`; if Coolify’s merge ever drops the named volume, fix in Coolify or simplify mounts.
 
 #### Browser session vs Coolify secret vs Coder DB
 
-| What | Typical redeploy behavior |
-|------|---------------------------|
-| **Browser session** | You may need to sign in again — normal. |
-| **`CODER_TOKEN` in Coolify** | Kept by Coolify; injected into the new container. |
-| **Users + tokens inside Coder** | Stored under `/home/coder/.coder` in the **`coder-data` volume** — **persists only if that volume name is stable** (see above). |
+| What | Notes |
+|------|--------|
+| **Browser session** | May reset after redeploy — normal. |
+| **`CODER_TOKEN` in Coolify** | Stored by Coolify; injected into the new container. |
+| **Users + API tokens in Coder** | Live in embedded Postgres under **`/home/coder/.config/coder`** — must be on a **persistent volume at that path** (see above). |
 
-**After fixing the volume name:** create the API token once, set `CODER_TOKEN` in Coolify, redeploy — the **same** in-Coder token remains valid until revoked or expired. Post-deploy only needs the env var, not an open browser session.
+Post-deploy only needs the **`CODER_TOKEN` env var** in the container, not an open browser tab.
 
 ## What runs where
 
@@ -141,9 +147,9 @@ After that, every deploy will refresh the template automatically. For **future l
 
 ### Setup wizard / admin / tokens reset on every redeploy
 
-1. **Cause:** Docker volume for Coder data was not **stable-named**; Coolify changed the Compose project identity between deploys → **new empty volume** each time. See **§ Persistent data (Coolify)** above.
-2. **Verify:** On the Docker host, `docker volume ls | grep coder` and `docker inspect <coder-container> --format '{{json .Mounts}}'` — the Coder data mount should point at a **fixed** volume name (e.g. `coder_opencode_sandbox_server_data`), not one that changes per deploy.
-3. **Coolify merged compose:** Ensure the **generated** `docker-compose.yaml` on the server still contains your explicit `coder-data` volume `name:` (Coolify sometimes rewrites compose).
+1. **Most common cause:** Volume mounted at the **wrong path**. Embedded Postgres must persist **`/home/coder/.config/coder`**, not `/home/coder/.coder`. See **§ Where Coder stores data** above.
+2. **Verify on the Docker host:** `docker inspect <coder-container> --format '{{json .Mounts}}'` — you should see the named volume (or bind) **Destination** `/home/coder/.config/coder` (or parent covering it).
+3. **Coolify:** If the **generated** compose drops the data volume when bind mounts are merged, see [coollabsio/coolify#5034](https://github.com/coollabsio/coolify/issues/5034).
 
 ### No templates at all
 
