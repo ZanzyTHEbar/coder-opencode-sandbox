@@ -2,20 +2,24 @@
 
 End-to-end automation runs on **your Coolify infrastructure** using a post-deployment command. No GitHub Actions (or other public CI) are used for template registration.
 
-## Why bind mounts do not work
+## Recommended: Compose at repo root
 
-When you set **Base directory** to `coder-deployment`, Coolify uses **only that folder** as the deployment root. The host path (e.g. `/data/coolify/applications/<uuid>/`) contains only what’s inside `coder-deployment/` (typically just `docker-compose.yml`; Coolify does not copy the rest of the repo or sibling directories). So:
+Set Coolify **Base directory** to **`.`** (repository root — leave empty if Coolify defaults to root). The deployment checkout then includes **`template/`** and **`coder-deployment/`**, so the root [`docker-compose.yml`](../docker-compose.yml) can bind-mount:
 
-- **`../template`** does not exist on the host (template is outside the base directory).
-- **`./post-deploy.sh`** and **`.:/deploy`** — even if Coolify copies files from the base dir, the compose project directory is only that folder; there is no `template/` sibling.
+- `./template` → `/templates` (default `TEMPLATE_DIR` in `post-deploy.sh`)
+- `./coder-deployment` → `/deploy` (`post-deploy.sh` at `/deploy/post-deploy.sh`)
 
-So **`/templates` and `/deploy` are never valid** in the Coder container when using Coolify with base-directory `coder-deployment`. The compose file no longer mounts them. The **only** way to run the template push is to **download the script and template from GitHub inside the container** (fetch-and-run).
+**No GitHub fetch is required** for post-deploy when using this layout.
+
+### Why a subfolder base directory broke mounts
+
+If **Base directory** is `coder-deployment`, Coolify’s deployment root is **only** that folder. The host path does not contain `../template` or a usable repo tree, so `./template` and `./coder-deployment` mounts **cannot** resolve. Use repo root as base directory, or use the fetch-and-run fallback below.
 
 ## Flow
 
 1. **Image** — Built and pushed to GHCR by GitHub Actions (or your own registry). The template defaults to `ghcr.io/zanzythebar/coder-opencode-sandbox:latest`.
-2. **Deploy Coder** — Coolify deploys the Coder app from this repo with build-pack **Docker Compose** and **Base directory** `coder-deployment`.
-3. **Post-deploy** — Coolify runs the **fetch-and-run** command (below) inside the Coder container. That command downloads the repo tarball and the script from GitHub, then runs the script so the **opencode-sandbox** template is pushed to Coder.
+2. **Deploy Coder** — Coolify deploys with build-pack **Docker Compose** and **Base directory** **`.`** (repo root), using root `docker-compose.yml`.
+3. **Post-deploy** — Run `sh /deploy/post-deploy.sh` inside the Coder container (see §3).
 
 ## Coolify setup
 
@@ -23,30 +27,36 @@ So **`/templates` and `/deploy` are never valid** in the Coder container when us
 
 - **Source:** This git repo.
 - **Build pack:** Docker Compose.
-- **Base directory:** `coder-deployment`.
+- **Base directory:** `.` (repo root).
 - **Expose port:** 4099.
 
 ### 2. Environment variables
 
 Set in Coolify for the Coder app:
 
-- **Coder and OIDC:** `CODER_ACCESS_URL`, `CODER_OIDC_ISSUER_URL`, `CODER_OIDC_CLIENT_ID`, `CODER_OIDC_CLIENT_SECRET`, `CODER_OIDC_EMAIL_FIELD`, `CODER_OIDC_USERNAME_FIELD`, `CODER_DISABLE_PASSWORD_AUTH`, `CODER_PROVISIONER_DAEMON`, `DOCKER_HOST` (and any others from `.env.example`).
+- **Coder and OIDC:** `CODER_ACCESS_URL`, `CODER_OIDC_ISSUER_URL`, `CODER_OIDC_CLIENT_ID`, `CODER_OIDC_CLIENT_SECRET`, `CODER_OIDC_EMAIL_FIELD`, `CODER_OIDC_USERNAME_FIELD`, `CODER_DISABLE_PASSWORD_AUTH`, `CODER_PROVISIONER_DAEMON`, `DOCKER_HOST` (and any others from `coder-deployment/.env.example`).
 - **For post-deploy template push:**
   - **CODER_URL** — `http://127.0.0.1:4099` (Coder inside the same container).
   - **CODER_TOKEN** — A Coder session or API token. Create it after first deploy: log in to Coder (e.g. via OIDC), then **User menu → Tokens → Create token**, and paste the value into Coolify as a secret.
 - **SANDBOX_IMAGE** (optional) — Override the workspace sandbox image (default in compose: `ghcr.io/zanzythebar/coder-opencode-sandbox:latest`).
 
-### 3. Post-deployment command (required)
+### 3. Post-deployment command
 
-In Coolify, open the Coder app → **Advanced** (or the section where pre/post-deploy commands are configured) and set the post-deployment command to **exactly** one of the following. There is no alternative; `/deploy/post-deploy.sh` and `/templates` do not exist in the container.
+**Recommended (repo root base directory):**
 
-**Using curl (Coder image has it):**
+```bash
+sh /deploy/post-deploy.sh
+```
+
+**Fallback** — only if you **cannot** set base directory to repo root (e.g. policy restricts context). Downloads template + script from GitHub inside the container:
+
+**Using curl:**
 
 ```bash
 sh -c 'cd /tmp && curl -sSL -o r.tar.gz "https://github.com/ZanzyTHEbar/coder-opencode-sandbox/archive/refs/heads/main.tar.gz" && EXTRACTED=$(tar -tzf r.tar.gz | head -1 | cut -d/ -f1) && tar -xzf r.tar.gz && export TEMPLATE_DIR="/tmp/$EXTRACTED/template" && curl -sSL "https://raw.githubusercontent.com/ZanzyTHEbar/coder-opencode-sandbox/main/coder-deployment/post-deploy.sh" | sh'
 ```
 
-**Using wget (if curl is not available):**
+**Using wget:**
 
 ```bash
 sh -c 'cd /tmp && wget -q -O r.tar.gz "https://github.com/ZanzyTHEbar/coder-opencode-sandbox/archive/refs/heads/main.tar.gz" && EXTRACTED=$(tar -tzf r.tar.gz | head -1 | cut -d/ -f1) && tar -xzf r.tar.gz && export TEMPLATE_DIR="/tmp/$EXTRACTED/template" && wget -qO- "https://raw.githubusercontent.com/ZanzyTHEbar/coder-opencode-sandbox/main/coder-deployment/post-deploy.sh" | sh'
@@ -69,14 +79,13 @@ After that, every deploy will refresh the template automatically.
 | Step                     | Where it runs         | How |
 |--------------------------|------------------------|-----|
 | Build sandbox image      | GitHub (or your CI)   | Use GHCR image or your registry. |
-| Deploy Coder             | Coolify               | Compose from `coder-deployment/`. |
-| Register/update template | Coolify                | Post-deploy: fetch-and-run command above. |
+| Deploy Coder             | Coolify               | Root `docker-compose.yml`, base **`.`**. |
+| Register/update template | Coolify              | Post-deploy: `sh /deploy/post-deploy.sh` (or fetch fallback). |
 | Authentik OIDC           | One-time              | Run `scripts/create_authentik_oidc_coder.py` once. |
 
 ## Troubleshooting
 
-- **`templates not found` / `post-deploy not found`** — You must use the fetch-and-run command from §3. Do not use `/deploy/post-deploy.sh` or `./post-deploy.sh`; those paths do not exist when using Coolify with base-directory `coder-deployment`.
-- **`curl: not found`** — Use the **wget** version of the command in §3.
-- **`wget: not found`** — The Coder image should include curl or wget (Alpine base). If neither exists, use a custom image that includes one, or open an issue.
+- **`templates not found` / `post-deploy not found`** — Ensure **Base directory** is repo root (`.`) so mounts exist. If you must use `coder-deployment` only, use the **fetch-and-run** commands in §3.
+- **`curl: not found`** — Use the **wget** fetch variant in §3 (fallback only).
 - **Template not updated after deploy** — Ensure `CODER_TOKEN` is set in Coolify. Check Coolify logs for the post-deploy step; the script logs “Template opencode-sandbox pushed successfully.” on success.
 - **Post-deploy fails: “connection refused”** — Coder server may not be ready yet. The script retries for up to ~1 minute.

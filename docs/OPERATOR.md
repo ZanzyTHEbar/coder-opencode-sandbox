@@ -2,7 +2,7 @@
 
 ## 1. Deploy Coder
 
-- Use the reference [coder-deployment/docker-compose.yml](../coder-deployment/docker-compose.yml) or deploy Coder on Kubernetes per [Coder docs](https://coder.com/docs/install).
+- Use the reference [docker-compose.yml](../docker-compose.yml) at the **repository root** (run `docker compose up` from the repo root so `./template` and `./coder-deployment` mount correctly), or deploy Coder on Kubernetes per [Coder docs](https://coder.com/docs/install).
 - Set **CODER_ACCESS_URL** to your public URL (e.g. `https://dev.example.com`). Coder must be reachable at this URL and able to reach your OIDC issuer (Authentik).
 
 ## 2. Configure OIDC (Authentik)

@@ -8,7 +8,7 @@ E2E automation runs on **your infrastructure** (Coolify), not in public CI. The 
 |------|--------|-----|
 | **1. Sandbox image** | GitHub Actions (optional) | [.github/workflows/build-push-image.yml](../.github/workflows/build-push-image.yml) builds `image/Dockerfile` and pushes to GHCR. Use that image or your own registry. |
 | **2. Terraform template** | Repo | `template/` is the Coder template; default `sandbox_image` is the GHCR image. |
-| **3. Coder deployment** | Coolify | Deploy from this repo with build-pack **dockercompose**, base-directory **coder-deployment**. |
+| **3. Coder deployment** | Coolify | Deploy from this repo with build-pack **dockercompose**, base-directory **`.`** (repo root; root [`docker-compose.yml`](../docker-compose.yml)). |
 | **4. Template in Coder** | Coolify post-deploy | A **post-deployment command** runs inside the Coder container and pushes the template. No public CI. |
 | **5. Authentik OIDC** | One-time | Run [scripts/create_authentik_oidc_coder.py](../scripts/create_authentik_oidc_coder.py) once. |
 
@@ -16,10 +16,10 @@ E2E automation runs on **your infrastructure** (Coolify), not in public CI. The 
 
 **Full guide:** [COOLIFY_E2E.md](COOLIFY_E2E.md)
 
-1. Create the Coder app in Coolify from this repo (dockercompose, base-directory `coder-deployment`).
+1. Create the Coder app in Coolify from this repo (dockercompose, base-directory **`.`** / repo root).
 2. Set env vars (OIDC, `CODER_ACCESS_URL`, etc.). For template auto-push, set **CODER_TOKEN** (create in Coder UI after first deploy, then add to Coolify).
-3. Set **Post-deployment command** to: `/deploy/post-deploy.sh`
-4. Every deploy: Coder starts, then the post-deploy script runs inside the container and runs `coder templates push opencode-sandbox` from the mounted `template/` dir. Template is always in sync with the repo.
+3. Set **Post-deployment command** to: `sh /deploy/post-deploy.sh`
+4. Every deploy: Coder starts, then the post-deploy script runs inside the container and runs `coder templates push opencode-sandbox` from the mounted `template/` dir. Template stays in sync with the checkout (no GitHub fetch needed).
 
 No GitHub secrets or public CI are used for template registration; everything runs on your Coolify server.
 

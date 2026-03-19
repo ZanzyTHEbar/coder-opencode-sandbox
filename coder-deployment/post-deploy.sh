@@ -1,9 +1,10 @@
 #!/bin/sh
 # Post-deployment script: register/update the opencode-sandbox template in Coder.
 # Runs inside the Coder container when Coolify runs the post-deploy command.
+# With repo-root docker-compose.yml: ./template → /templates, ./coder-deployment → /deploy (TEMPLATE_DIR defaults to /templates).
 # Requires: CODER_URL (default http://127.0.0.1:4099), CODER_TOKEN (set in Coolify env).
 # Optional: SANDBOX_IMAGE — must be in compose environment: for Coolify to pass it through.
-# Optional: TEMPLATE_DIR — default /templates (mount); use when bind mount is empty (e.g. Coolify helper).
+# Optional: TEMPLATE_DIR — default /templates; override when using fetch-and-run (see docs/COOLIFY_E2E.md).
 set -e
 
 CODER_URL="${CODER_URL:-http://127.0.0.1:4099}"

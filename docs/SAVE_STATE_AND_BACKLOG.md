@@ -18,7 +18,7 @@
 All of the following must be done in your environment; the repo does not do them for you:
 
 1. **Image** — Use `ghcr.io/<owner>/coder-opencode-sandbox:latest` (set GHCR package to Public after first workflow run) or build from `image/` and push to a registry Coder can pull from.
-2. **Deploy Coder** — Run Coder (e.g. `coder-deployment/docker-compose.yml`) with **CODER_ACCESS_URL** set to your public URL and **DOCKER_HOST** so the provisioner can create containers.
+2. **Deploy Coder** — Run Coder from repo root (`docker-compose.yml`) with **CODER_ACCESS_URL** set to your public URL and **DOCKER_HOST** so the provisioner can create containers.
 3. **Authentik OIDC** — Create OIDC provider + application in Authentik; set redirect URI to `https://<CODER_ACCESS_URL>/api/v2/users/oidc/callback`; set subject mode to a stable value (e.g. hashed user id); copy issuer URL, client id, client secret into Coder env.
 4. **Coder env** — Set all `CODER_OIDC_*` and `CODER_DISABLE_PASSWORD_AUTH=true` in the Coder server (e.g. in Compose or K8s).
 5. **Create template** — Run `coder templates create opencode-sandbox --directory template` and set **sandbox_image** to the image from step 1.

@@ -16,13 +16,13 @@ No local build needed. After the first workflow run, set the package to **Public
 
 ## 2. Deploy Coder and configure Authentik
 
-- Deploy from [coder-deployment/](coder-deployment/) (Compose or Coolify with `base-directory: coder-deployment`).
+- Deploy from repo root [docker-compose.yml](docker-compose.yml) (`docker compose up` locally), or Coolify with **Base directory** **`.`** (repo root) so `template/` and `coder-deployment/` bind-mount correctly.
 - Set **CODER_ACCESS_URL** and OIDC env vars; see [docs/authentik/OIDC_SETUP.md](docs/authentik/OIDC_SETUP.md). Run [scripts/create_authentik_oidc_coder.py](scripts/create_authentik_oidc_coder.py) once if using Authentik.
 - Ensure Coder's provisioner can reach Docker (socket or DOCKER_HOST).
 
 ## 3. Register the template (Coolify post-deploy or manual)
 
-**Option A — Coolify (e2e):** Set the app’s **Post-deployment command** to `/deploy/post-deploy.sh` and set **CODER_TOKEN** in Coolify env (create token in Coder after first deploy). Every deploy will push the template automatically. See [docs/COOLIFY_E2E.md](docs/COOLIFY_E2E.md).
+**Option A — Coolify (e2e):** Set the app’s **Post-deployment command** to `sh /deploy/post-deploy.sh` and set **CODER_TOKEN** in Coolify env (create token in Coder after first deploy). Every deploy will push the template automatically. See [docs/COOLIFY_E2E.md](docs/COOLIFY_E2E.md).
 
 **Option B — Manual (one script):** From the repo root: `CODER_URL=https://coder.example.com CODER_TOKEN=<token> ./scripts/bootstrap-template.sh`
 

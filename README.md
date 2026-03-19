@@ -13,9 +13,10 @@ Per-user, isolated OpenCode sandboxes behind OIDC. Users log in via Authentik an
 
 | Path | Purpose |
 |------|--------|
+| `docker-compose.yml` | Reference Coder deployment (repo root so `template/` and `coder-deployment/` bind-mount correctly; e.g. Coolify base **`.`**). |
 | `template/` | Terraform template (volume, container, agent, OpenCode app). Default `sandbox_image` = GHCR image. |
 | `image/` | Dockerfile for the sandbox image (Linux + OpenCode + Coder agent); built by CI to GHCR. |
-| `coder-deployment/` | Reference Coder deployment (Compose + env). |
+| `coder-deployment/` | `.env.example`, `post-deploy.sh`, [README](coder-deployment/README.md) (Compose lives at repo root). |
 | `scripts/` | [bootstrap-template.sh](scripts/bootstrap-template.sh) (register template in Coder), [create_authentik_oidc_coder.py](scripts/create_authentik_oidc_coder.py) (Authentik OIDC). |
 | `docs/` | Operator and user guides; [E2E_AUTOMATION](docs/E2E_AUTOMATION.md), Authentik OIDC, [BACKUP](docs/BACKUP.md), [WILDCARD_APP_URLS](docs/WILDCARD_APP_URLS.md), [IMPROVEMENTS](docs/IMPROVEMENTS.md). |
 | `VERSION` | Template version (e.g. 1.0.0); see OPERATOR §9. |
@@ -28,7 +29,7 @@ A public image is built and published via [GitHub Actions](.github/workflows/bui
 
 1. Deploy Coder and configure OIDC (Authentik). See [docs/OPERATOR.md](docs/OPERATOR.md) and [docs/authentik/OIDC_SETUP.md](docs/authentik/OIDC_SETUP.md).
 2. Image is built by CI to GHCR; the template defaults to it. No local build needed.
-3. Register the template: use Coolify post-deploy `/deploy/post-deploy.sh` (see [docs/COOLIFY_E2E.md](docs/COOLIFY_E2E.md)) or run `./scripts/bootstrap-template.sh` manually.
+3. Register the template: Coolify post-deploy `sh /deploy/post-deploy.sh` with base directory **`.`** (see [docs/COOLIFY_E2E.md](docs/COOLIFY_E2E.md)), or run `./scripts/bootstrap-template.sh` manually.
 4. Users create a workspace from the template and use the **OpenCode** app and **Terminal**. See [docs/USER.md](docs/USER.md).
 
 ## Persistence

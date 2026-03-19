@@ -1,8 +1,9 @@
 # Reference Coder deployment (Docker Compose).
-# Use with Coolify: build-pack dockercompose, base-directory coder-deployment.
-# With Coolify + base-directory, the deployment root is only this folder; ../template and .
-# are not available on the host, so we do not mount them. Post-deploy must use the
-# fetch-and-run command from docs/COOLIFY_E2E.md (downloads script + template from GitHub).
+# Repo root is the Compose project directory so bind mounts resolve:
+#   ./template → /templates (for coder templates push)
+#   ./coder-deployment → /deploy (for post-deploy.sh)
+#
+# Coolify: build-pack Docker Compose, Base directory: . (repo root, leave empty if Coolify defaults to root).
 
 services:
   coder:
@@ -30,6 +31,8 @@ services:
     volumes:
       - coder-data:/home/coder/.coder
       - /var/run/docker.sock:/var/run/docker.sock
+      - ./template:/templates:ro
+      - ./coder-deployment:/deploy:ro
     ports:
       - "4099:4099"
     restart: unless-stopped
