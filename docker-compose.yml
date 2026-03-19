@@ -48,6 +48,10 @@ services:
       CODER_PG_CONNECTION_URL: "postgresql://${POSTGRES_USER:-coder}:${POSTGRES_PASSWORD:-changeme}@database/${POSTGRES_DB:-coder}?sslmode=disable"
       # Must be a URL workspaces and users can reach (not localhost for non-local templates). Set in Coolify / .env.
       CODER_ACCESS_URL: ${CODER_ACCESS_URL:-https://dev.example.com}
+      # Required for subdomain workspace apps (OpenCode SPA) and VS Code Desktop SSH hostnames.
+      # Example: CODER_ACCESS_URL=https://dev.zacariahheim.com → set *.dev.zacariahheim.com in DNS + TLS + proxy route to Coder.
+      # https://coder.com/docs/admin/networking/wildcard-access-url
+      CODER_WILDCARD_ACCESS_URL: ${CODER_WILDCARD_ACCESS_URL:-}
       CODER_HTTP_ADDRESS: "0.0.0.0:4099"
       CODER_DEFAULT_TOKEN_LIFETIME: ${CODER_DEFAULT_TOKEN_LIFETIME:-8760h}
       CODER_MAX_ADMIN_TOKEN_LIFETIME: ${CODER_MAX_ADMIN_TOKEN_LIFETIME:-8760h}
@@ -61,6 +65,8 @@ services:
       CODER_PROVISIONER_DAEMON: "true"
       # Helps workspace agents / DERP behind reverse proxies (Traefik, Coolify).
       CODER_DERP_FORCE_WEBSOCKETS: "${CODER_DERP_FORCE_WEBSOCKETS:-true}"
+      # Prefer relay when direct P2P fails through NAT / complex Docker routing (optional hardening).
+      CODER_BLOCK_DIRECT: "${CODER_BLOCK_DIRECT:-true}"
       DOCKER_HOST: "unix:///var/run/docker.sock"
       CODER_URL: ${CODER_URL:-http://127.0.0.1:4099}
       CODER_TOKEN: ${CODER_TOKEN:-}

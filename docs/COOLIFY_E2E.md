@@ -36,7 +36,7 @@ If **Base directory** is `coder-deployment`, Coolify’s deployment root is **on
 
 Set in Coolify for the Coder app:
 
-- **Coder and OIDC:** `CODER_ACCESS_URL`, `CODER_OIDC_ISSUER_URL`, `CODER_OIDC_CLIENT_ID`, `CODER_OIDC_CLIENT_SECRET`, `CODER_OIDC_EMAIL_FIELD`, `CODER_OIDC_USERNAME_FIELD`, `CODER_DISABLE_PASSWORD_AUTH`, `CODER_PROVISIONER_DAEMON`, `DOCKER_HOST` (and any others from `coder-deployment/.env.example`).
+- **Coder and OIDC:** `CODER_ACCESS_URL`, **`CODER_WILDCARD_ACCESS_URL`** (e.g. `*.dev.example.com` when the UI is `https://dev.example.com` — required for OpenCode SPA + VS Code SSH; see [WILDCARD_APP_URLS.md](WILDCARD_APP_URLS.md)), `CODER_OIDC_ISSUER_URL`, `CODER_OIDC_CLIENT_ID`, `CODER_OIDC_CLIENT_SECRET`, `CODER_OIDC_EMAIL_FIELD`, `CODER_OIDC_USERNAME_FIELD`, `CODER_DISABLE_PASSWORD_AUTH`, `CODER_PROVISIONER_DAEMON`, `DOCKER_HOST` (and any others from `coder-deployment/.env.example`).
 - **PostgreSQL (dedicated service):** Root [`docker-compose.yml`](../docker-compose.yml) runs a **`database`** service (`postgres:17-alpine`) and sets **`CODER_PG_CONNECTION_URL`** for the Coder service. Set a strong secret in production:
   - **`POSTGRES_PASSWORD`** (required in practice; compose default `changeme` is dev-only).
   - Optional: **`POSTGRES_USER`**, **`POSTGRES_DB`** (defaults: `coder` / `coder`).

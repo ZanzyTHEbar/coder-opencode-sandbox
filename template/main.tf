@@ -24,8 +24,8 @@ variable "sandbox_image" {
 }
 
 variable "workspace_docker_network" {
-  default     = "coolify"
-  description = "Docker network name for workspace containers (e.g. coolify). Matches root docker-compose external network so agents reach CODER_ACCESS_URL. Set to \"\" for default bridge only."
+  default     = ""
+  description = "Optional Docker network to attach workspace containers to (e.g. coolify). Default empty = Docker default bridge, which avoids routing/DNS issues on some hosts. Set only if you know you need the same network as Coder/Traefik."
   type        = string
 }
 
@@ -95,9 +95,10 @@ resource "docker_container" "workspace" {
     }
   }
 
-  # Run Coder agent init script (downloads and starts the agent; agent runs startup_script).
-  # Terraform-compatible replace (no regexreplace required); mirrors upstream docker template intent.
-  command = ["sh", "-c", replace(replace(coder_agent.main.init_script, "127.0.0.1", "host.docker.internal"), "localhost", "host.docker.internal")]
+  # Our image sets CMD (no ENTRYPOINT); use command so we don't stack image CMD + entrypoint.
+  # Do NOT rewrite 127.0.0.1 in the init script: OpenCode must bind and answer on loopback inside
+  # the workspace (Coder app healthcheck uses localhost). Replacing with host.docker.internal breaks that.
+  command = ["sh", "-c", coder_agent.main.init_script]
   env = [
     "CODER_AGENT_TOKEN=${coder_agent.main.token}"
   ]
@@ -128,12 +129,12 @@ resource "coder_agent" "main" {
       touch "$HOME/.init_done"
     fi
 
-    # Bind loopback only (Coder app proxies to localhost). Avoids binding 0.0.0.0 (OpenCode "unsecured" warning).
+    # Bind loopback only (Coder app proxies to localhost). You may still see a password warning until OpenCode is configured with OPENCODE_SERVER_PASSWORD (would require matching coder_app healthcheck auth).
     (opencode web --hostname 127.0.0.1 --port 4096 &)
 
     # Wait for OpenCode to be ready so the Coder app healthcheck does not flake.
-    for i in $(seq 1 30); do
-      if curl -sf -o /dev/null http://localhost:4096/doc 2>/dev/null; then
+    for i in $(seq 1 60); do
+      if curl -sf -o /dev/null http://127.0.0.1:4096/doc 2>/dev/null; then
         break
       fi
       sleep 1
@@ -155,7 +156,7 @@ resource "coder_agent" "main" {
     key          = "0_cpu_usage"
     script       = "coder stat cpu"
     interval     = 10
-    timeout      = 1
+    timeout      = 5
   }
 
   metadata {
@@ -163,7 +164,7 @@ resource "coder_agent" "main" {
     key          = "1_ram_usage"
     script       = "coder stat mem"
     interval     = 10
-    timeout      = 1
+    timeout      = 5
   }
 
   metadata {
@@ -171,7 +172,7 @@ resource "coder_agent" "main" {
     key          = "2_home_disk"
     script       = "coder stat disk --path $${HOME}"
     interval     = 60
-    timeout      = 1
+    timeout      = 10
   }
 }
 
@@ -185,6 +186,10 @@ resource "coder_app" "opencode" {
   display_name = "OpenCode"
   url          = "http://localhost:4096/"
   icon         = "/icon/code.svg"
+  # Path-based apps break OpenCode’s SPA: the browser requests /assets/* from the Coder origin root (404 + wrong MIME).
+  # Subdomain mode serves the app at the root of a dedicated host — requires CODER_WILDCARD_ACCESS_URL + DNS *.domain.
+  # https://coder.com/docs/admin/networking/wildcard-access-url
+  subdomain = true
 
   healthcheck {
     # OpenCode web serves OpenAPI spec at /doc; 2xx indicates server is up.

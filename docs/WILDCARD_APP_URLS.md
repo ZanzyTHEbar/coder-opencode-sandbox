@@ -1,5 +1,14 @@
 # Wildcard app URLs (stable URLs per workspace app)
 
+## Symptoms if this is missing or misconfigured
+
+- **OpenCode (or any SPA) white screen** in the app tab; browser console shows **404** on `/assets/index-….js`, **stylesheet MIME type `text/plain`**, scripts **refused** because MIME is **`text/html`** (you’re getting Traefik/Coder error HTML or plain-text fallbacks, not the workspace app). Root cause: path-based routing made the document load from the app proxy, but **`/assets/*` resolves to the main site origin** (e.g. `https://dev.example.com/assets/...`), not the workspace.
+- **VS Code Desktop** fails with **hostname could not be resolved** and drops the remote — Coder’s SSH/config hostnames expect a **wildcard DNS zone** matching **`CODER_WILDCARD_ACCESS_URL`**.
+
+The fix for both is the same: **`CODER_WILDCARD_ACCESS_URL`**, **DNS `*.domain` → Coder**, **TLS for the wildcard**, and your reverse proxy (Coolify/Traefik) routing **`Host: *.<domain>`** to the Coder service. The OpenCode template uses **`subdomain = true`** on `coder_app` so the app is served at the **root of a dedicated hostname** (compatible with SPAs).
+
+---
+
 Without a wildcard access URL, users open the OpenCode app only through the Coder dashboard (Coder proxies to the workspace). With a **wildcard access URL** and TLS, each workspace app can have a stable, shareable URL like:
 
 ```text
