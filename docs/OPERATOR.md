@@ -63,8 +63,20 @@ Set this as the template variable **sandbox_image**. After the first workflow ru
 ## 7. Wildcard / app URLs (optional)
 
 - To give each workspace app a stable URL (e.g. for the OpenCode app), configure [Coder’s wildcard access URL](https://coder.com/docs/admin/networking/wildcard-access-url) and TLS so that `*.dev.example.com` resolves to Coder. Otherwise users open the OpenCode app via the dashboard (Coder proxies to the workspace).
+- Full steps: [WILDCARD_APP_URLS.md](WILDCARD_APP_URLS.md).
 
-## 8. Troubleshooting
+## 8. Backup (before delete)
+
+- Deleting a workspace removes its volume; data is lost unless you back up first. Prefer **stop** over **delete** when you want to keep data.
+- To export a workspace's home before delete: see [BACKUP.md](BACKUP.md) for the volume export command and optional S3 upload.
+
+## 9. Template versioning and upgrades
+
+- **Version:** The repo tracks a template version in the root `VERSION` file (e.g. `1.0.0`). Releases can be tagged in git (e.g. `v1.0.0`).
+- **Pin at create:** To use a specific revision when creating the template, clone the repo at a tag or commit before running `coder templates create opencode-sandbox --directory template`.
+- **Upgrade:** Pull the latest (or desired tag), then run `coder templates push` from the `template/` directory to update the template in Coder. Existing workspaces may need to be updated to the new template version (Coder will prompt or allow "update workspace" when the template changes). Test with a single workspace before rolling out.
+
+## 10. Troubleshooting
 
 - **Agent never connects:** Ensure the container runs the agent init script (template sets `command = ["sh", "-c", coder_agent.main.init_script]`) and has `CODER_AGENT_TOKEN` in env. Check Coder logs and container logs.
 - **OpenCode app 502 / unhealthy:** The agent’s startup_script starts `opencode web --hostname 0.0.0.0 --port 4096` in the background. Ensure OpenCode is installed in the image and the healthcheck URL `http://localhost:4096/doc` is reachable from inside the container.

@@ -44,7 +44,7 @@ resource "docker_image" "sandbox" {
 
 locals {
   # Docker container name: [a-zA-Z0-9][a-zA-Z0-9_.-]*, max 63 chars. Sanitize and truncate.
-  _sanitized = replace(replace(replace("${data.coder_workspace_owner.me.name}-${data.coder_workspace.me.name}", " ", "-"), "/", "-"), "\\", "-")
+  _sanitized     = replace(replace(replace("${data.coder_workspace_owner.me.name}-${data.coder_workspace.me.name}", " ", "-"), "/", "-"), "\\", "-")
   container_name = "coder-${substr(local._sanitized, 0, min(57, length(local._sanitized)))}"
 }
 
@@ -90,6 +90,14 @@ resource "coder_agent" "main" {
 
     # Start OpenCode web UI in background (port 4096; Coder app will proxy to it).
     (opencode web --hostname 0.0.0.0 --port 4096 &)
+
+    # Wait for OpenCode to be ready so the Coder app healthcheck does not flake.
+    for i in $(seq 1 30); do
+      if curl -sf -o /dev/null http://localhost:4096/doc 2>/dev/null; then
+        break
+      fi
+      sleep 1
+    done
 
     # Agent is ready.
   EOT

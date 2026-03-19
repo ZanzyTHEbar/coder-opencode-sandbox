@@ -16,7 +16,8 @@ Per-user, isolated OpenCode sandboxes behind OIDC. Users log in via Authentik an
 | `template/` | Terraform template (volume, container, agent, OpenCode app). |
 | `image/` | Dockerfile and scripts for the sandbox image (Linux + OpenCode + Coder agent). |
 | `coder-deployment/` | Reference Coder deployment (Compose + env). |
-| `docs/` | Operator and user guides; Authentik OIDC setup. |
+| `docs/` | Operator and user guides; Authentik OIDC setup; [BACKUP](docs/BACKUP.md), [WILDCARD_APP_URLS](docs/WILDCARD_APP_URLS.md), [IMPROVEMENTS](docs/IMPROVEMENTS.md). |
+| `VERSION` | Template version (e.g. 1.0.0); see OPERATOR §9. |
 
 ## Pre-built image (GHCR)
 
@@ -37,7 +38,13 @@ After the first workflow run, set the package to **Public**: repo → **Packages
 ## Persistence
 
 - **Across stop/start**: Everything under `/home/coder` (OpenCode DB, config, code, shell history) is on a persistent volume; it survives workspace stop and is back when the workspace starts again.
-- **Across delete**: Deleting a workspace runs `terraform destroy` and removes the volume. For long-term retention, use "stop" instead of "delete," or implement a backup strategy (see handoff doc).
+- **Across delete**: Deleting a workspace runs `terraform destroy` and removes the volume. For long-term retention, use "stop" instead of "delete," or run a [backup before delete](docs/BACKUP.md).
+
+## Optional and improvements
+
+- **Stable app URLs:** [Wildcard app URLs](docs/WILDCARD_APP_URLS.md) (DNS + TLS + `CODER_WILDCARD_ACCESS_URL`).
+- **Template versioning:** See [OPERATOR.md](docs/OPERATOR.md#9-template-versioning-and-upgrades) and the root `VERSION` file.
+- **What we're missing / how to do better:** [docs/IMPROVEMENTS.md](docs/IMPROVEMENTS.md) (backup, wildcard, versioning, CI, resource limits, smoke-test, etc.).
 
 ## License
 

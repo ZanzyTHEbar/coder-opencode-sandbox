@@ -3,7 +3,7 @@
 # User: coder, HOME: /home/coder (mounted persistent volume in template).
 
 ARG OPENCODE_VERSION=1.2.27
-FROM ubuntu:22.04
+FROM ubuntu:24.04
 ARG OPENCODE_VERSION=1.2.27
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -30,8 +30,8 @@ RUN ARCH=$(dpkg --print-architecture) && \
 ENV PATH="/usr/local/bin:${PATH}"
 RUN opencode --version || true
 
-# User coder: match Coder's default workspace user.
-RUN useradd -m -s /bin/bash -d /home/coder coder && \
+# User coder: match Coder's default workspace user, and add to sudoers group.
+RUN useradd -m -s /bin/bash -d /home/coder -G sudo coder && \
     echo "coder ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers.d/coder && \
     chmod 0440 /etc/sudoers.d/coder
 

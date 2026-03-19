@@ -8,7 +8,7 @@ services:
     command: server
     environment:
       CODER_ACCESS_URL: ${CODER_ACCESS_URL:-https://dev.example.com}
-      CODER_HTTP_ADDRESS: "0.0.0.0:8080"
+      CODER_HTTP_ADDRESS: "0.0.0.0:4099"
       # OIDC (Authentik) — set these for your IdP.
       CODER_OIDC_ISSUER_URL: ${CODER_OIDC_ISSUER_URL}
       CODER_OIDC_CLIENT_ID: ${CODER_OIDC_CLIENT_ID}
@@ -23,7 +23,7 @@ services:
       - coder-data:/home/coder/.coder
       - /var/run/docker.sock:/var/run/docker.sock
     ports:
-      - "8080:8080"
+      - "4099:4099"
     restart: unless-stopped
 
 volumes:
