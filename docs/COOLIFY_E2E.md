@@ -74,6 +74,8 @@ The script reads `CODER_URL`, `CODER_TOKEN`, and `SANDBOX_IMAGE` from the contai
 
 After that, every deploy will refresh the template automatically.
 
+**Deadlock:** If OIDC does not work, you cannot complete step 2, so you never get `CODER_TOKEN` and **no template is ever pushed**. Fix OIDC first (§ troubleshooting below), or temporarily set **`CODER_DISABLE_PASSWORD_AUTH=false`**, redeploy, create the first admin user / log in with password, create a token, set `CODER_TOKEN`, then turn password auth off again if you want OIDC-only.
+
 ## What runs where
 
 | Step                     | Where it runs         | How |
@@ -84,6 +86,30 @@ After that, every deploy will refresh the template automatically.
 | Authentik OIDC           | One-time              | Run `scripts/create_authentik_oidc_coder.py` once. |
 
 ## Troubleshooting
+
+### No templates at all
+
+1. **Coolify post-deploy logs** — Look for `CODER_TOKEN not set` (expected until you add a token), `FATAL: no readable /templates/main.tf` (wrong base directory / mount), or `coder templates push` errors (permissions, API down).
+2. **`CODER_TOKEN`** — Must be a valid API token for a user who can manage templates. If OIDC never worked, you never created one; see **Deadlock** in §4.
+3. **Base directory** — Must be repo root (`.`) so `/templates` contains your Terraform template. If you see the FATAL line above, fix base directory and redeploy.
+4. **Manual push (bypass post-deploy)** — From any machine with `coder` CLI:  
+   `CODER_URL=https://<your-coder-host> CODER_SESSION_TOKEN=<token> coder templates push opencode-sandbox -d ./template --variable sandbox_image=ghcr.io/zanzythebar/coder-opencode-sandbox:latest -y`  
+   (Use your real URL, token, and image.)
+
+### OIDC / Authentik not working at all
+
+1. **Confirm env vars reach the container** — In Coolify or on the host: `docker exec <coder-container> env | grep CODER_`  
+   Empty `CODER_OIDC_ISSUER_URL` / `CLIENT_ID` / `SECRET` means Coolify did not inject them (wrong variable names, not marked for runtime, or not saved).
+2. **`CODER_ACCESS_URL`** — Must be exactly the URL users type in the browser (scheme + host, no path), e.g. `https://coder.example.com`. It must match the **redirect URI** registered in Authentik:  
+   `https://<same-host>/api/v2/users/oidc/callback` — no trailing slash on the callback path.
+3. **`CODER_OIDC_ISSUER_URL`** — Must be Authentik’s **issuer** for that provider, usually:  
+   `https://<authentik-host>/application/o/<application-slug>/`  
+   (Trailing slash is fine; wrong slug or using provider *name* instead of *application* slug breaks discovery.) Open in a browser:  
+   `<ISSUER_URL>.well-known/openid-configuration` — it must return JSON.
+4. **Network** — The Coder container must reach Authentik over HTTPS (DNS, firewall, correct internal vs public URL).
+5. **Recovery** — Set `CODER_DISABLE_PASSWORD_AUTH=false`, redeploy, sign up / log in with a local password if Coder allows first-user bootstrap, create `CODER_TOKEN`, push template, then fix OIDC and revert to `true` if desired.
+
+### Other
 
 - **`templates not found` / `post-deploy not found`** — Ensure **Base directory** is repo root (`.`) so mounts exist. If you must use `coder-deployment` only, use the **fetch-and-run** commands in §3.
 - **`curl: not found`** — Use the **wget** fetch variant in §3 (fallback only).
