@@ -30,7 +30,7 @@ Set in Coolify for the Coder app:
   - **CODER_URL** — `http://127.0.0.1:4099` (Coder inside the same container). Coolify may inject this via the compose default; you can override if needed.
   - **CODER_TOKEN** — A Coder session or API token. Create it after first deploy: log in to Coder (e.g. via OIDC), then **User menu → Tokens → Create token**, and paste the value into Coolify as a secret. Once set, every subsequent deploy will run the post-deploy script and push the template.
 
-Optional: **SANDBOX_IMAGE** to override the template’s image (default: `ghcr.io/zanzythebar/coder-opencode-sandbox:latest`).
+Optional: **SANDBOX_IMAGE** in Coolify to override the workspace sandbox image used when `post-deploy.sh` runs `coder templates push`. It is declared in `coder-deployment/docker-compose.yml` as `${SANDBOX_IMAGE:-ghcr.io/zanzythebar/coder-opencode-sandbox:latest}` so Coolify passes it into the container (variables not listed in the compose `environment` block are not injected).
 
 ### 3. Post-deployment command
 
