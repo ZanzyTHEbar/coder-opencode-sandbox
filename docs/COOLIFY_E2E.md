@@ -1,6 +1,8 @@
-# E2E automation via Coolify (no public CI)
+# E2E automation via Coolify
 
-End-to-end automation runs on **your Coolify infrastructure** using a post-deployment command. No GitHub Actions (or other public CI) are used for template registration.
+**Recommended (no stale templates):** Register the template from **GitHub Actions** on every push to `main` — the template **always** matches the git commit. See **[TEMPLATE_CI.md](TEMPLATE_CI.md)** (secrets: `CODER_URL`, `CODER_TOKEN`). Coolify’s **“preserve repo during deployment”** then does **not** affect which Terraform is registered.
+
+**Optional:** A **post-deployment command** on Coolify can also run `coder templates push` from the bind-mounted `./template`. Use that for bootstrap before CI secrets exist, or as redundancy; **CI remains the source of truth** when both are configured.
 
 **Upstream Coder deployment:** Root [`docker-compose.yml`](../docker-compose.yml) is aligned with [Coder’s official `compose.yaml`](https://github.com/coder/coder/blob/main/compose.yaml) (Postgres, health checks, Docker socket). See [CODER_OFFICIAL_DEPLOYMENT.md](CODER_OFFICIAL_DEPLOYMENT.md) for ports (`4099` vs upstream `7080`), **`coolify` network**, optional **`DOCKER_GID` / `group_add`**, and **`CODER_VERSION`** pinning.
 
@@ -20,8 +22,9 @@ If **Base directory** is `coder-deployment`, Coolify’s deployment root is **on
 ## Flow
 
 1. **Image** — Built and pushed to GHCR by GitHub Actions (or your own registry). The template defaults to `ghcr.io/zanzythebar/coder-opencode-sandbox:latest`.
-2. **Deploy Coder** — Coolify deploys with build-pack **Docker Compose** and **Base directory** **`.`** (repo root), using root `docker-compose.yml`.
-3. **Post-deploy** — Run `sh /deploy/post-deploy.sh` inside the Coder container (see §3).
+2. **Template registration (automated)** — On push to `main`, [`.github/workflows/push-coder-template.yml`](../.github/workflows/push-coder-template.yml) runs **`coder templates push`** from the **workflow checkout** (see [TEMPLATE_CI.md](TEMPLATE_CI.md)).
+3. **Deploy Coder** — Coolify deploys with build-pack **Docker Compose** and **Base directory** **`.`** (repo root), using root `docker-compose.yml`.
+4. **Post-deploy (optional)** — `sh /deploy/post-deploy.sh` inside the Coder container (§3) if you want a second push from the host mount or have not enabled CI secrets yet.
 
 ## Coolify setup
 
@@ -169,9 +172,10 @@ Post-deploy only needs the **`CODER_TOKEN` env var** in the container, not an op
 
 | Step                     | Where it runs         | How |
 |--------------------------|------------------------|-----|
-| Build sandbox image      | GitHub (or your CI)   | Use GHCR image or your registry. |
+| Build sandbox image      | GitHub Actions        | GHCR image (or your registry). |
+| Register/update template | **GitHub Actions** (recommended) | [`.github/workflows/push-coder-template.yml`](../.github/workflows/push-coder-template.yml) — `coder templates push` at commit SHA. See [TEMPLATE_CI.md](TEMPLATE_CI.md). |
+| Register/update template | Coolify (optional)    | Post-deploy: `sh /deploy/post-deploy.sh` from bind mount. |
 | Deploy Coder             | Coolify               | Root `docker-compose.yml`, base **`.`**. |
-| Register/update template | Coolify              | Post-deploy: `sh /deploy/post-deploy.sh` (or fetch fallback). |
 | Authentik OIDC           | One-time              | Run `scripts/create_authentik_oidc_coder.py` once. |
 
 ## Troubleshooting

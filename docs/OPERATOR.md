@@ -49,9 +49,10 @@ Set this as the template variable **sandbox_image**. After the first workflow ru
   docker push your-registry/opencode-sandbox:latest
   ```
 
-## 5. Create/update the template in Coder (e2e via Coolify)
+## 5. Create/update the template in Coder
 
-- **Coolify:** Set **Post-deployment command** to `sh /deploy/post-deploy.sh` and set **CODER_TOKEN** in the app env. Every deploy will run the script inside the Coder container and push the template. See [COOLIFY_E2E.md](COOLIFY_E2E.md).
+- **Recommended — CI:** On push to `main`, GitHub Actions pushes the template from the **exact commit** (no Coolify staleness). Configure **`CODER_URL`** and **`CODER_TOKEN`** repository secrets. See [TEMPLATE_CI.md](TEMPLATE_CI.md).
+- **Coolify (optional):** Set **Post-deployment command** to `sh /deploy/post-deploy.sh` and **CODER_TOKEN** if you want a second registration path or have not set CI secrets yet. See [COOLIFY_E2E.md](COOLIFY_E2E.md).
 - **Manual:** Run `CODER_URL=https://coder.example.com CODER_TOKEN=<token> ./scripts/bootstrap-template.sh` from the repo root. Override image with `SANDBOX_IMAGE=... ./scripts/bootstrap-template.sh` if needed.
 
 ## 6. Persistence and lifecycle

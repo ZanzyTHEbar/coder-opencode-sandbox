@@ -12,6 +12,8 @@
 # Optional: SANDBOX_IMAGE, POST_DEPLOY_GITHUB_REPO, POST_DEPLOY_GITHUB_REF, POST_DEPLOY_GITHUB_REF_TYPE, POST_DEPLOY_GITHUB_TOKEN
 #
 # Coolify: post-deployment command MUST run in the **coder** service. See docs/COOLIFY_E2E.md.
+# Recommended automation: GitHub Actions pushes the template from the exact commit (docs/TEMPLATE_CI.md) —
+# this script is optional when CI secrets are set; use for bootstrap or redundant push from bind mount.
 set -e
 
 CODER_URL="${CODER_URL:-http://127.0.0.1:4099}"

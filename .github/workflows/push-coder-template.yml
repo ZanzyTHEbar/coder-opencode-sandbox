@@ -1,0 +1,76 @@
+# Register/update the Coder Terraform template from THIS commit — not from Coolify's on-disk copy.
+# Eliminates "stale template" when Coolify preserves an old checkout: the template always matches Git main.
+#
+# Required repo secrets (Settings → Secrets and variables → Actions):
+#   CODER_URL          — Public URL of your Coder deployment (e.g. https://dev.example.com)
+#   CODER_TOKEN        — API token with permission to push templates
+#
+# Optional:
+#   SANDBOX_IMAGE      — Full image ref for template variable (default: ghcr.io/<lowercase repo>:latest)
+
+name: Push Coder template
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "template/**"
+      - "VERSION"
+      - ".github/workflows/push-coder-template.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: coder-template-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CODER_CLI_VERSION: v2.27.0
+
+jobs:
+  push-template:
+    name: Validate + push to Coder
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.5.0"
+          terraform_wrapper: false
+
+      - name: Terraform validate
+        working-directory: template
+        run: |
+          terraform init -backend=false
+          terraform validate
+
+      - name: Install Coder CLI
+        run: |
+          set -e
+          curl -fsSL "https://github.com/coder/coder/releases/download/${CODER_CLI_VERSION}/coder-linux-amd64.tar.gz" -o /tmp/coder.tgz
+          tar -xzf /tmp/coder.tgz -C /usr/local/bin coder
+          coder version
+
+      - name: Push template (Git commit = source of truth)
+        env:
+          CODER_URL: ${{ secrets.CODER_URL }}
+          CODER_SESSION_TOKEN: ${{ secrets.CODER_TOKEN }}
+          SANDBOX_IMAGE_SECRET: ${{ secrets.SANDBOX_IMAGE }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CODER_URL:-}" ] || [ -z "${CODER_SESSION_TOKEN:-}" ]; then
+            echo "::warning::Secrets CODER_URL and/or CODER_TOKEN are not set — skipping template push."
+            echo "Add them to enable CI-driven registration (see docs/TEMPLATE_CI.md). Coolify post-deploy can still push."
+            exit 0
+          fi
+          REPO_LC="$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
+          if [ -n "${SANDBOX_IMAGE_SECRET:-}" ]; then
+            IMAGE="${SANDBOX_IMAGE_SECRET}"
+          else
+            IMAGE="ghcr.io/${REPO_LC}:latest"
+          fi
+          echo "Pushing opencode-sandbox ref=${{ github.sha }} sandbox_image=${IMAGE}"
+          coder templates push opencode-sandbox \
+            --directory ./template \
+            --variable "sandbox_image=${IMAGE}" \
+            -y
