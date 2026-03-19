@@ -66,6 +66,18 @@ locals {
   # Docker container name: [a-zA-Z0-9][a-zA-Z0-9_.-]*, max 63 chars. Sanitize and truncate.
   _sanitized     = replace(replace(replace("${data.coder_workspace_owner.me.name}-${data.coder_workspace.me.name}", " ", "-"), "/", "-"), "\\", "-")
   container_name = "coder-${substr(local._sanitized, 0, min(57, length(local._sanitized)))}"
+
+  # Must run *before* the rest of coder_agent.main.init_script: that script starts the agent, which can
+  # touch $HOME before startup_script runs. startup_script alone is too late for chown/mkdir.
+  # Use /usr/bin/sudo so PATH cannot hide sudo (image: Dockerfile sudo + NOPASSWD).
+  workspace_volume_bootstrap = <<-EOT
+set -e
+export HOME=/home/coder
+/usr/bin/sudo chown -R coder:coder /home/coder
+/usr/bin/sudo mkdir -p /home/coder/workspace
+/usr/bin/sudo chown coder:coder /home/coder/workspace
+
+EOT
 }
 
 resource "docker_container" "workspace" {
@@ -98,7 +110,8 @@ resource "docker_container" "workspace" {
   # Our image sets CMD (no ENTRYPOINT); use command so we don't stack image CMD + entrypoint.
   # Do NOT rewrite 127.0.0.1 in the init script: OpenCode must bind and answer on loopback inside
   # the workspace (Coder app healthcheck uses localhost). Replacing with host.docker.internal breaks that.
-  command = ["sh", "-c", coder_agent.main.init_script]
+  # Prepend volume bootstrap so chown/mkdir happen before agent bootstrap (see locals.workspace_volume_bootstrap).
+  command = ["sh", "-c", join("", [local.workspace_volume_bootstrap, coder_agent.main.init_script])]
   env = [
     "CODER_AGENT_TOKEN=${coder_agent.main.token}"
   ]
@@ -117,9 +130,7 @@ resource "coder_agent" "main" {
     set -e
     export HOME=/home/coder
 
-    # Docker named volumes almost always mount as root:root. The agent runs as `coder`.
-    # Do not rely on `[ -w "$HOME" ]` — it can be wrong on some drivers; always chown first.
-    sudo chown -R coder:coder "$HOME"
+    # Ownership and workspace/ were fixed in init_script (see docker_container command prepend).
 
     # Prepare home with defaults on first start (volume was empty).
     if [ ! -f "$HOME/.init_done" ]; then
