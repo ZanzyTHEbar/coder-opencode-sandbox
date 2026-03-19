@@ -1,0 +1,9 @@
+# Terraform (keep .terraform.lock.hcl for reproducible builds)
+template/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+
+# Local env (do not commit secrets)
+coder-deployment/.env
