@@ -179,6 +179,24 @@ Post-deploy only needs the **`CODER_TOKEN` env var** in the container, not an op
 
 6. **Stale `/templates` in the Coder container** — If `grep chown /templates/main.tf` inside the container does not show the latest commit, Coolify’s deployment checkout may be behind `main`. **Redeploy** the app (pull latest Git), or push using a **fresh tree from GitHub** (same idea as the fetch fallback in §3): extract `main.tar.gz`, set `TEMPLATE_DIR` to `…/template`, then `sh /deploy/post-deploy.sh`.
 
+### Stale template on disk (Permission denied on `/home/coder/workspace` after “redeploy”)
+
+**Symptom:** Workspaces show **`User=coder`** in `docker inspect`, init **`Cmd`** is only the agent downloader (no `workspace_volume_bootstrap`), **`/home/coder`** is **root:root** — while **GitHub** `template/main.tf` clearly has **`user = "0:0"`** and bootstrap. You “redeployed” but nothing changed.
+
+**Cause:** Coolify keeps an application directory on the Docker host (e.g. **`/data/coolify/applications/<uuid>/`**). The compose bind mount **`./template` → `/templates`** reads from **`…/template` on that host path**, not from GitHub directly. A **container restart** or **redeploy that does not refresh that directory** can leave **an old `main.tf`** (e.g. ~4.9 KiB, old `variables.tf` layout) while `main` on GitHub is larger and includes bootstrap.
+
+**Verify (on the Docker host):**
+
+```bash
+# Replace <uuid> with your Coolify app folder (see docker inspect on coder container Mounts → Source for /templates).
+grep -E 'workspace_volume_bootstrap|user = "0:0"' /data/coolify/applications/<uuid>/template/main.tf
+wc -c /data/coolify/applications/<uuid>/template/main.tf
+```
+
+A current template should **include both strings** and **`main.tf`** should be on the order of **~9–10 KiB** (single-file `main.tf`; older layouts used `variables.tf`).
+
+**Fix:** Force Coolify to **pull latest Git** and run a **full deployment** that updates the checkout, or **manually** sync that directory from `main`. As a bypass, run **`coder templates push`** from any machine with a **fresh clone** of `main` (see §3 fetch fallback). **`post-deploy.sh`** now **fails** if the mounted template lacks bootstrap markers (unless `POST_DEPLOY_SKIP_TEMPLATE_VERIFY=1`).
+
 ### OIDC / Authentik not working at all
 
 - **Only GitHub and Email/Password on the first-time setup screen** — This is expected. Coder’s “create your first admin” page does not show OIDC. Create the first user with **Email and Password**, then use the **login** page (after logging out or in another session); OIDC appears there. See [authentik/OIDC_SETUP.md](authentik/OIDC_SETUP.md).

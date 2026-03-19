@@ -2,6 +2,28 @@
 
 This is the **real** workflow: prove **which phase** fails, **which user** runs `mkdir`, and **what the filesystem looks like** — not another blind `chown`/`sudo` guess.
 
+## DragonServer quick runbook (no guessing)
+
+On the **Docker host** where workspace containers run (e.g. `cool-res` via SSH), **after** you’ve pushed the template and **updated** or **recreated** the workspace:
+
+```bash
+# Workspace container name (or ID): docker ps | grep coder, or Coder UI → workspace.
+CID=<workspace_container>
+
+docker exec "$CID" sh -c 'echo === /tmp ===; cat /tmp/coder-opencode-startup.log 2>&1; echo === bootstrap ===; cat /home/coder/.coder-debug/bootstrap.log 2>&1'
+docker inspect "$CID" --format 'User={{.Config.User}}'
+```
+
+**Read the evidence:**
+
+| What you see | Meaning |
+|--------------|--------|
+| `bootstrap.log` **missing** or **no** `bootstrap ok` line | Bootstrap/init didn’t run as expected, or **old template** (template not pushed / workspace not updated). |
+| `bootstrap ok` but startup shows **`HOME writable: NO`** or **`FATAL`** on `mkdir` | **Agent** phase: wrong user, **`HOME`**, or perms **after** bootstrap. |
+| `docker inspect` **`User=`** not **`0:0`** | This workspace container **isn’t** using the current template revision (`user = "0:0"`). Often **not** “stale Coder” but **stale files on the Coolify host**: `./template` bind-mount comes from `/data/coolify/applications/<uuid>/template` — must match GitHub `main`. See [COOLIFY_E2E.md](COOLIFY_E2E.md) section **Stale template on disk**. |
+
+Then fix the **specific** row (re-push template, fix image, etc.) — don’t stack random `chown`/`sudo` attempts.
+
 ## Execution order (must match what you see in logs)
 
 1. **Container `command`** — `sh -c '<bootstrap><coder_agent.init_script>'`  

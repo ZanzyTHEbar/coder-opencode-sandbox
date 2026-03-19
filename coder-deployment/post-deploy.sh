@@ -24,6 +24,20 @@ if [ ! -r "$TEMPLATE_DIR/main.tf" ]; then
   exit 1
 fi
 
+# Fail loud if the mounted template is not the current opencode-sandbox layout (bootstrap + root user).
+# Common mistake: Coolify "redeploy" recycles containers but the host path under /data/coolify/applications/.../template
+# is still an old checkout — coder templates push then registers stale Terraform (User=coder, no chown bootstrap).
+if [ "${POST_DEPLOY_SKIP_TEMPLATE_VERIFY:-}" != "1" ]; then
+  if ! grep -q 'workspace_volume_bootstrap' "$TEMPLATE_DIR/main.tf" 2>/dev/null \
+    || ! grep -q 'user = "0:0"' "$TEMPLATE_DIR/main.tf" 2>/dev/null; then
+    echo "post-deploy: FATAL: $TEMPLATE_DIR/main.tf is missing volume bootstrap (workspace_volume_bootstrap) and/or user = \"0:0\"." >&2
+    echo "The bind mount is not the latest repo template. Pull latest on the Coolify host, redeploy from Git, or re-sync the application directory — see docs/COOLIFY_E2E.md § Stale template on disk." >&2
+    echo "To push anyway (not recommended): POST_DEPLOY_SKIP_TEMPLATE_VERIFY=1" >&2
+    exit 1
+  fi
+  echo "post-deploy: template sanity OK (bootstrap + user=0:0 present)" >&2
+fi
+
 if [ -z "${CODER_TOKEN:-}" ]; then
   echo "CODER_TOKEN not set; skipping template push. Set it in Coolify env after you can log in (see docs/COOLIFY_E2E.md if OIDC is broken)." >&2
   exit 0
