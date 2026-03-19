@@ -73,6 +73,11 @@ services:
       CODER_URL: ${CODER_URL:-http://127.0.0.1:4099}
       CODER_TOKEN: ${CODER_TOKEN:-}
       SANDBOX_IMAGE: ${SANDBOX_IMAGE:-ghcr.io/zanzythebar/coder-opencode-sandbox:latest}
+      # Post-deploy: auto = verify bind-mounted ./template; if stale, fetch from GitHub (see coder-deployment/post-deploy.sh).
+      POST_DEPLOY_TEMPLATE_SOURCE: ${POST_DEPLOY_TEMPLATE_SOURCE:-auto}
+      POST_DEPLOY_GITHUB_REPO: ${POST_DEPLOY_GITHUB_REPO:-ZanzyTHEbar/coder-opencode-sandbox}
+      POST_DEPLOY_GITHUB_REF: ${POST_DEPLOY_GITHUB_REF:-main}
+      POST_DEPLOY_GITHUB_REF_TYPE: ${POST_DEPLOY_GITHUB_REF_TYPE:-heads}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./template:/templates:ro

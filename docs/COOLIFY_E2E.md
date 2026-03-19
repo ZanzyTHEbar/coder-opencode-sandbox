@@ -78,6 +78,20 @@ Coder’s stock defaults cap many API tokens at **168 hours (7 days)** via:
 
 There is **no** documented way to run `coder templates push` with **zero** API credentials; Coder’s model is API tokens with configurable lifetimes and scopes.
 
+### Post-deploy template source (`POST_DEPLOY_TEMPLATE_SOURCE`)
+
+Post-deploy registers the Terraform template with **`coder templates push`**. The template files must match **GitHub `main`** or workspaces can get **stale** Terraform (e.g. `User=coder` without bootstrap).
+
+| Value | Behavior |
+|--------|----------|
+| **`auto`** (default) | Use the bind-mounted **`./template` → `/templates`** if it contains **`workspace_volume_bootstrap`** and **`user = "0:0"`** in `main.tf`. If the mount is missing or stale (common when Coolify’s app directory on disk is behind Git), **fetch the same tree from GitHub** and push from that directory. |
+| **`mount`** | Only the bind mount — **fail** if sanity checks fail (strict). Use when you never want outbound GitHub fetches. |
+| **`github`** | **Always** fetch from GitHub (`POST_DEPLOY_GITHUB_REPO` / `POST_DEPLOY_GITHUB_REF` / `POST_DEPLOY_GITHUB_REF_TYPE`) and ignore the mount. |
+
+Optional: **`POST_DEPLOY_GITHUB_TOKEN`** — Bearer token for **private** repos (public `ZanzyTHEbar/coder-opencode-sandbox` does not need it).
+
+**Coolify env:** set `POST_DEPLOY_TEMPLATE_SOURCE=auto` (or leave unset) so redeploys are **self-healing** without manually syncing `/data/coolify/applications/.../template/`.
+
 ### 3. Post-deployment command
 
 **Docker Compose — which container runs the command**
@@ -195,7 +209,9 @@ wc -c /data/coolify/applications/<uuid>/template/main.tf
 
 A current template should **include both strings** and **`main.tf`** should be on the order of **~9–10 KiB** (single-file `main.tf`; older layouts used `variables.tf`).
 
-**Fix:** Force Coolify to **pull latest Git** and run a **full deployment** that updates the checkout, or **manually** sync that directory from `main`. As a bypass, run **`coder templates push`** from any machine with a **fresh clone** of `main` (see §3 fetch fallback). **`post-deploy.sh`** now **fails** if the mounted template lacks bootstrap markers (unless `POST_DEPLOY_SKIP_TEMPLATE_VERIFY=1`).
+**Fix:** Default **`POST_DEPLOY_TEMPLATE_SOURCE=auto`** (see § above) so post-deploy **fetches from GitHub** when the bind mount is stale. Optionally force Coolify to **pull latest Git** so the host directory matches `main`. **`mount`** mode still fails loud if markers are missing.
+
+**Legacy:** `POST_DEPLOY_SKIP_TEMPLATE_VERIFY=1` only affects strict **`mount`** mode (not recommended).
 
 ### OIDC / Authentik not working at all
 
