@@ -6,7 +6,7 @@ Per-user, isolated OpenCode sandboxes behind OIDC. Users log in via Authentik an
 
 - **Coder**: Control plane, OIDC login, workspace lifecycle (start/stop/delete), template provisioning.
 - **Authentik**: OIDC IdP; no Coder password auth.
-- **Template**: One workspace = one container + one persistent volume at `/home/coder`. **Registration:** Prefer **[CI push](docs/TEMPLATE_CI.md)** (`coder templates push` from GitHub Actions at each commit) so Coolify’s preserved checkout cannot serve stale Terraform.
+- **Template**: One workspace = one container + one persistent volume at `/home/coder`. **Registration:** Coolify **post-deploy** runs **`coder templates push`** with **`POST_DEPLOY_TEMPLATE_SOURCE=auto`** (default) — use bind-mounted `template/` when healthy, else fetch from GitHub. No CI required. See **[TEMPLATE_REGISTRATION.md](docs/TEMPLATE_REGISTRATION.md)**.
 - **OpenCode**: Runs unchanged inside the container; state under `~/.local/share/opencode` and `~/.config/opencode` (on the volume).
 
 ## Repository layout
@@ -18,7 +18,7 @@ Per-user, isolated OpenCode sandboxes behind OIDC. Users log in via Authentik an
 | `image/` | Dockerfile for the sandbox image (Linux + OpenCode + Coder agent); built by CI to GHCR. |
 | `coder-deployment/` | `.env.example`, `post-deploy.sh`, [README](coder-deployment/README.md) (Compose lives at repo root). |
 | `scripts/` | [bootstrap-template.sh](scripts/bootstrap-template.sh) (register template in Coder), [create_authentik_oidc_coder.py](scripts/create_authentik_oidc_coder.py) (Authentik OIDC). |
-| `docs/` | Operator and user guides; **[TEMPLATE_CI](docs/TEMPLATE_CI.md)** (CI-driven template push), [E2E_AUTOMATION](docs/E2E_AUTOMATION.md), [Coder official deployment parity](docs/CODER_OFFICIAL_DEPLOYMENT.md), Authentik OIDC, [BACKUP](docs/BACKUP.md), [WILDCARD_APP_URLS](docs/WILDCARD_APP_URLS.md), [Pangolin Traefik wildcard](docs/PANGOLIN_TRAEFIK_WILDCARD.md), [IMPROVEMENTS](docs/IMPROVEMENTS.md). |
+| `docs/` | Operator and user guides; **[TEMPLATE_REGISTRATION](docs/TEMPLATE_REGISTRATION.md)** (post-deploy template push), [E2E_AUTOMATION](docs/E2E_AUTOMATION.md), [Coder official deployment parity](docs/CODER_OFFICIAL_DEPLOYMENT.md), Authentik OIDC, [BACKUP](docs/BACKUP.md), [WILDCARD_APP_URLS](docs/WILDCARD_APP_URLS.md), [Pangolin Traefik wildcard](docs/PANGOLIN_TRAEFIK_WILDCARD.md), [IMPROVEMENTS](docs/IMPROVEMENTS.md). |
 | `VERSION` | Template version (e.g. 1.0.0); see OPERATOR §9. |
 
 ## Pre-built image (GHCR)
@@ -29,7 +29,7 @@ A public image is built and published via [GitHub Actions](.github/workflows/bui
 
 1. Deploy Coder and configure OIDC (Authentik). See [docs/OPERATOR.md](docs/OPERATOR.md), [docs/CODER_OFFICIAL_DEPLOYMENT.md](docs/CODER_OFFICIAL_DEPLOYMENT.md) (upstream `compose.yaml` parity), and [docs/authentik/OIDC_SETUP.md](docs/authentik/OIDC_SETUP.md).
 2. Image is built by CI to GHCR; the template defaults to it. No local build needed.
-3. Register the template: add **`CODER_URL`** + **`CODER_TOKEN`** [GitHub Actions secrets](docs/TEMPLATE_CI.md) so each push to `main` runs `coder templates push` from CI (recommended). Optionally Coolify post-deploy `sh /deploy/post-deploy.sh` ([docs/COOLIFY_E2E.md](docs/COOLIFY_E2E.md)) or `./scripts/bootstrap-template.sh` manually.
+3. Register the template: Coolify **post-deploy** `sh /deploy/post-deploy.sh` with **`CODER_TOKEN`** ([docs/COOLIFY_E2E.md](docs/COOLIFY_E2E.md)); default **`POST_DEPLOY_TEMPLATE_SOURCE=auto`** avoids stale mounts without CI ([docs/TEMPLATE_REGISTRATION.md](docs/TEMPLATE_REGISTRATION.md)). Or `./scripts/bootstrap-template.sh` manually.
 4. Users create a workspace from the template and use the **OpenCode** app and **Terminal**. See [docs/USER.md](docs/USER.md).
 
 ## Persistence

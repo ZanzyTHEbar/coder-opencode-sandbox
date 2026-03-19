@@ -2,7 +2,7 @@
 
 Follow these in order to go from zero to a working OpenCode sandbox on Coder. The flow is **e2e automated**: our Terraform template and our GHCR Docker image are the single source of truth; one script registers the template in Coder.
 
-**Template via CI (recommended):** [docs/TEMPLATE_CI.md](docs/TEMPLATE_CI.md) · **Coolify:** [docs/COOLIFY_E2E.md](docs/COOLIFY_E2E.md) · **Overview:** [docs/E2E_AUTOMATION.md](docs/E2E_AUTOMATION.md)
+**Template registration:** [docs/TEMPLATE_REGISTRATION.md](docs/TEMPLATE_REGISTRATION.md) · **Coolify:** [docs/COOLIFY_E2E.md](docs/COOLIFY_E2E.md) · **Overview:** [docs/E2E_AUTOMATION.md](docs/E2E_AUTOMATION.md)
 
 ## 1. Image (automated by CI)
 
@@ -22,11 +22,9 @@ No local build needed. After the first workflow run, set the package to **Public
 
 ## 3. Register the template
 
-**Option A — GitHub Actions (recommended):** Add repository secrets **`CODER_URL`** and **`CODER_TOKEN`**. Each push to `main` that changes `template/` runs [`.github/workflows/push-coder-template.yml`](.github/workflows/push-coder-template.yml). The template in Coder **always** matches git — independent of Coolify’s preserved repo. See [docs/TEMPLATE_CI.md](docs/TEMPLATE_CI.md).
+**Option A — Coolify post-deploy (recommended):** Set **Post-deployment command** to `sh /deploy/post-deploy.sh` and **CODER_TOKEN** in Coolify env. Default **`POST_DEPLOY_TEMPLATE_SOURCE=auto`** (see [docs/TEMPLATE_REGISTRATION.md](docs/TEMPLATE_REGISTRATION.md)) fetches from GitHub if the bind-mounted `template/` is stale — **no** GitHub Actions required. See [docs/COOLIFY_E2E.md](docs/COOLIFY_E2E.md).
 
-**Option B — Coolify post-deploy:** Set **Post-deployment command** to `sh /deploy/post-deploy.sh` and **CODER_TOKEN** in Coolify env. See [docs/COOLIFY_E2E.md](docs/COOLIFY_E2E.md).
-
-**Option C — Manual:** `CODER_URL=https://coder.example.com CODER_TOKEN=<token> ./scripts/bootstrap-template.sh`
+**Option B — Manual:** `CODER_URL=https://coder.example.com CODER_TOKEN=<token> ./scripts/bootstrap-template.sh`
 
 ## 4. Smoke-test
 
