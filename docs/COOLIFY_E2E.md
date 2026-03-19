@@ -37,8 +37,39 @@ Set in Coolify for the Coder app:
 - **Coder and OIDC:** `CODER_ACCESS_URL`, `CODER_OIDC_ISSUER_URL`, `CODER_OIDC_CLIENT_ID`, `CODER_OIDC_CLIENT_SECRET`, `CODER_OIDC_EMAIL_FIELD`, `CODER_OIDC_USERNAME_FIELD`, `CODER_DISABLE_PASSWORD_AUTH`, `CODER_PROVISIONER_DAEMON`, `DOCKER_HOST` (and any others from `coder-deployment/.env.example`).
 - **For post-deploy template push:**
   - **CODER_URL** — `http://127.0.0.1:4099` (Coder inside the same container).
-  - **CODER_TOKEN** — A Coder session or API token. Create it after first deploy: log in to Coder (e.g. via OIDC), then **User menu → Tokens → Create token**, and paste the value into Coolify as a secret.
+  - **CODER_TOKEN** — A Coder **API token** (not a browser session cookie). Create after first login; store in Coolify as a secret. See **§ API tokens and 7-day expiry** below if the UI only allows short-lived tokens.
 - **SANDBOX_IMAGE** (optional) — Override the workspace sandbox image (default in compose: `ghcr.io/zanzythebar/coder-opencode-sandbox:latest`).
+- **Token lifetime (optional but recommended for automation)** — Root [`docker-compose.yml`](../docker-compose.yml) sets **`CODER_DEFAULT_TOKEN_LIFETIME`** and **`CODER_MAX_ADMIN_TOKEN_LIFETIME`** (default `8760h` ≈ one year) so tokens you create are allowed to last longer than Coder’s stock **7-day** default. Override in Coolify if your policy needs different values.
+
+### API tokens and 7-day expiry
+
+`coder templates push` (used by post-deploy) authenticates with **`CODER_SESSION_TOKEN` / `CODER_TOKEN`**. There is **no password or OIDC flow inside the post-deploy script** — the Coder CLI needs a token or an interactive login, which is why we use an API token in env.
+
+Coder’s stock defaults cap many API tokens at **168 hours (7 days)** via:
+
+- **`CODER_DEFAULT_TOKEN_LIFETIME`** — used when a token is created **without** an explicit lifetime (e.g. some UI flows).
+- **`CODER_MAX_ADMIN_TOKEN_LIFETIME`** — cap when **admins** create tokens for automation.
+
+**Fix (keep using `CODER_TOKEN` in Coolify):**
+
+1. Set on the **Coder server** (already in root `docker-compose.yml`; ensure Coolify passes them through):
+   - `CODER_DEFAULT_TOKEN_LIFETIME=8760h` (or `365d`, `1y` per [Coder duration format](https://coder.com/docs/reference/cli/tokens_create))
+   - `CODER_MAX_ADMIN_TOKEN_LIFETIME=8760h`
+2. **Redeploy Coder** so the new limits apply.
+3. **Create a new token** with an explicit long lifetime (subject to the caps above), e.g. from your machine:
+   ```bash
+   coder login https://dev.example.com   # or your Coder URL
+   coder tokens create --name coolify-post-deploy --lifetime 365d
+   ```
+   Optionally restrict scope to the minimum needed for template updates, e.g. `--scope template:*` (verify against your Coder version’s [scopes](https://coder.com/docs/admin/users/sessions-tokens)).
+4. Put that token value in Coolify as **`CODER_TOKEN`**.
+
+**Alternatives if you refuse any long-lived secret in Coolify:**
+
+- **GitHub Actions (or other CI)** on push to `main`: run `coder templates push` using a short-lived or rotating token stored only in the CI secret store — the token still exists, but it is not on the Coder host and can be rotated by the pipeline.
+- **Manual / scheduled `coder templates push`** from an operator machine when you change the template — no automation in Coolify.
+
+There is **no** documented way to run `coder templates push` with **zero** API credentials; Coder’s model is API tokens with configurable lifetimes and scopes.
 
 ### 3. Post-deployment command
 
@@ -67,14 +98,14 @@ The script reads `CODER_URL`, `CODER_TOKEN`, and `SANDBOX_IMAGE` from the contai
 ### 4. First deploy (token bootstrap)
 
 1. Deploy once **without** `CODER_TOKEN`. Coder will start; the post-deploy script will skip the push (exits 0 when `CODER_TOKEN` is unset).
-2. Log in to Coder via OIDC (Authentik).
-3. Create a token in Coder (User menu → Tokens).
+2. Open Coder in the browser. You will see **“Welcome — create your first admin user”**. That screen **only shows GitHub and Email/Password** — OIDC does not appear there (see [OIDC_SETUP.md](authentik/OIDC_SETUP.md)). Create the first admin with **Email and Password** (ensure `CODER_DISABLE_PASSWORD_AUTH` is not `true` yet, or the form may not work).
+3. After the first user is created, you are in. Create a token: **User menu → Tokens → Create token**.
 4. Add `CODER_TOKEN` to the app’s environment in Coolify (as a secret).
 5. Redeploy. The post-deploy script will run again and push the template.
 
-After that, every deploy will refresh the template automatically.
+After that, every deploy will refresh the template automatically. For **future logins**, use the normal **login** page — OIDC (Authentik) appears there; you can set `CODER_OIDC_SIGN_IN_TEXT="Sign in with Authentik"` and, if you want, `CODER_DISABLE_PASSWORD_AUTH=true` after the first user exists.
 
-**Deadlock:** If OIDC does not work, you cannot complete step 2, so you never get `CODER_TOKEN` and **no template is ever pushed**. Fix OIDC first (§ troubleshooting below), or temporarily set **`CODER_DISABLE_PASSWORD_AUTH=false`**, redeploy, create the first admin user / log in with password, create a token, set `CODER_TOKEN`, then turn password auth off again if you want OIDC-only.
+**Deadlock:** If you set `CODER_DISABLE_PASSWORD_AUTH=true` before creating the first user, the setup screen may not let you create an account. Use password once on the setup screen (step 2), then switch to OIDC-only on the login page if desired.
 
 ## What runs where
 
@@ -98,6 +129,7 @@ After that, every deploy will refresh the template automatically.
 
 ### OIDC / Authentik not working at all
 
+- **Only GitHub and Email/Password on the first-time setup screen** — This is expected. Coder’s “create your first admin” page does not show OIDC. Create the first user with **Email and Password**, then use the **login** page (after logging out or in another session); OIDC appears there. See [authentik/OIDC_SETUP.md](authentik/OIDC_SETUP.md).
 1. **Confirm env vars reach the container** — In Coolify or on the host: `docker exec <coder-container> env | grep CODER_`  
    Empty `CODER_OIDC_ISSUER_URL` / `CLIENT_ID` / `SECRET` means Coolify did not inject them (wrong variable names, not marked for runtime, or not saved).
 2. **`CODER_ACCESS_URL`** — Must be exactly the URL users type in the browser (scheme + host, no path), e.g. `https://coder.example.com`. It must match the **redirect URI** registered in Authentik:  

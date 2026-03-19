@@ -2,6 +2,18 @@
 
 Configure Authentik as the OIDC provider for Coder so users log in with Authentik (no Coder password).
 
+## Important: First-time setup screen vs login page
+
+Coder’s **“Welcome — create your first admin user”** screen only shows **GitHub** and **Email/Password**. **OIDC (Authentik) does not appear on that screen.** This is how Coder’s first-user wizard works.
+
+**What to do:**
+
+1. On the first-time setup page, create the first admin using **Email and Password** (or GitHub if you use it). Do **not** set `CODER_DISABLE_PASSWORD_AUTH=true` until after this step, or the form may not work.
+2. After the first user is created, you are logged in. To use OIDC from then on: log out (or open Coder in a private window) and go to the **login** page. The **OIDC / “Sign in with …”** option appears there for all users (including the admin you just created).
+3. Optional: set **`CODER_OIDC_SIGN_IN_TEXT="Sign in with Authentik"`** so the button is clearly labeled. Optional: set **`CODER_DISABLE_PASSWORD_AUTH=true`** after the first user exists if you want OIDC-only for future logins.
+
+So: use **password (or GitHub) once** on the setup screen, then use **OIDC (Authentik)** on the normal login page.
+
 ## 1. Create an OIDC provider in Authentik
 
 1. In Authentik Admin: **Applications** → **Providers** → **Create**.
@@ -39,7 +51,8 @@ Set these environment variables on Coder (e.g. in your Compose or K8s deployment
 | **CODER_OIDC_CLIENT_SECRET** | Client secret from the Authentik provider. |
 | **CODER_OIDC_EMAIL_FIELD** | Claim for email (e.g. `email`). |
 | **CODER_OIDC_USERNAME_FIELD** | Claim for username (e.g. `preferred_username`). |
-| **CODER_DISABLE_PASSWORD_AUTH** | `true` |
+| **CODER_DISABLE_PASSWORD_AUTH** | `true` (optional; leave `false` until after you create the first admin with password — see above). |
+| **CODER_OIDC_SIGN_IN_TEXT** | Optional. e.g. `Sign in with Authentik` so the login button is clear. |
 
 **Finding the issuer URL:** In Authentik, open the provider or application and check the **OpenID configuration** or **Issuer** field. It is often:
 
