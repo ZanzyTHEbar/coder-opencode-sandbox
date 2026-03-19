@@ -3,10 +3,10 @@
 # Runs inside the Coder container when Coolify runs the post-deployment command.
 #
 # Template source (POST_DEPLOY_TEMPLATE_SOURCE):
-#   auto (default) — Use bind mount ./template → /templates if it passes sanity checks;
-#                    otherwise fetch from GitHub so stale Coolify checkouts cannot register old Terraform.
-#   mount          — Only the bind mount; fail if missing bootstrap markers (strict).
-#   github         — Always fetch from GitHub (ignore mount).
+#   mount (default) — Use only the bind-mounted repo: ./template → /templates. This is the same tree Coolify
+#                     deployed; post-deploy runs `coder templates push` against it. Fix deployment if stale.
+#   auto            — If the mount fails sanity checks, fetch a tarball from GitHub (recovery / broken checkout).
+#   github          — Always fetch from GitHub (CI or no bind mount); rare.
 #
 # Requires: CODER_URL (default http://127.0.0.1:4099), CODER_TOKEN (set in Coolify env).
 # Optional: SANDBOX_IMAGE, POST_DEPLOY_GITHUB_REPO, POST_DEPLOY_GITHUB_REF, POST_DEPLOY_GITHUB_REF_TYPE, POST_DEPLOY_GITHUB_TOKEN
@@ -18,7 +18,7 @@ CODER_URL="${CODER_URL:-http://127.0.0.1:4099}"
 export CODER_URL
 SANDBOX_IMAGE="${SANDBOX_IMAGE:-ghcr.io/zanzythebar/coder-opencode-sandbox:latest}"
 MOUNT_TEMPLATE_DIR="${TEMPLATE_DIR:-/templates}"
-POST_DEPLOY_TEMPLATE_SOURCE="${POST_DEPLOY_TEMPLATE_SOURCE:-auto}"
+POST_DEPLOY_TEMPLATE_SOURCE="${POST_DEPLOY_TEMPLATE_SOURCE:-mount}"
 POST_DEPLOY_GITHUB_REPO="${POST_DEPLOY_GITHUB_REPO:-ZanzyTHEbar/coder-opencode-sandbox}"
 POST_DEPLOY_GITHUB_REF="${POST_DEPLOY_GITHUB_REF:-main}"
 POST_DEPLOY_GITHUB_REF_TYPE="${POST_DEPLOY_GITHUB_REF_TYPE:-heads}"
@@ -91,8 +91,9 @@ resolve_template_dir() {
         exit 1
       fi
       if [ "${POST_DEPLOY_SKIP_TEMPLATE_VERIFY:-}" != "1" ] && ! template_verify_ok "$TEMPLATE_DIR"; then
-        echo "post-deploy: FATAL: $TEMPLATE_DIR/main.tf missing bootstrap markers — see docs/COOLIFY_E2E.md" >&2
-        echo "Or set POST_DEPLOY_TEMPLATE_SOURCE=auto to fetch from GitHub when the mount is stale." >&2
+        echo "post-deploy: FATAL: $TEMPLATE_DIR/main.tf missing bootstrap markers." >&2
+        echo "Fix: ensure Coolify deploy refreshes the git checkout (full deploy / pull latest) so ./template matches main." >&2
+        echo "Temporary bypass: POST_DEPLOY_TEMPLATE_SOURCE=auto fetches from GitHub — see docs/COOLIFY_E2E.md" >&2
         exit 1
       fi
       echo "post-deploy: using bind-mounted template at $TEMPLATE_DIR" >&2

@@ -80,17 +80,19 @@ There is **no** documented way to run `coder templates push` with **zero** API c
 
 ### Post-deploy template source (`POST_DEPLOY_TEMPLATE_SOURCE`)
 
-Post-deploy registers the Terraform template with **`coder templates push`**. The template files must match **GitHub `main`** or workspaces can get **stale** Terraform (e.g. `User=coder` without bootstrap).
+**Canonical model:** Coolify deploys from **this git repo**. Compose bind-mounts **`./template` → `/templates`** inside the Coder container. Post-deploy runs **`coder templates push -d /templates`** — one source of truth: **the checkout on disk** that Coolify copied or pulled. You are **not** meant to maintain a second copy via tarball unless something is wrong with deployment.
+
+**Keep the checkout current:** Use a **Git-based** Coolify app, **base directory `.`** (repo root), and **full deploys** that **pull / refresh** the application directory before containers start. If `/templates/main.tf` on the host is behind `main`, fix **deployment** (pull branch, redeploy), not post-deploy logic.
 
 | Value | Behavior |
 |--------|----------|
-| **`auto`** (default) | Use the bind-mounted **`./template` → `/templates`** if it contains **`workspace_volume_bootstrap`** and **`user = "0:0"`** in `main.tf`. If the mount is missing or stale (common when Coolify’s app directory on disk is behind Git), **fetch the same tree from GitHub** and push from that directory. |
-| **`mount`** | Only the bind mount — **fail** if sanity checks fail (strict). Use when you never want outbound GitHub fetches. |
-| **`github`** | **Always** fetch from GitHub (`POST_DEPLOY_GITHUB_REPO` / `POST_DEPLOY_GITHUB_REF` / `POST_DEPLOY_GITHUB_REF_TYPE`) and ignore the mount. |
+| **`mount`** (default) | Use only the bind-mounted **`./template` → `/templates`**. Fails if `main.tf` is missing expected markers — that means the **deployed repo snapshot** is stale or wrong branch. |
+| **`auto`** | Try the mount first; if sanity checks fail, **fetch** the same ref from GitHub (recovery when the Coolify checkout is stuck; optional outbound). |
+| **`github`** | Always fetch from GitHub (`POST_DEPLOY_GITHUB_*`) — for CI, private mirror workflows, or when you intentionally have no usable mount. |
 
-Optional: **`POST_DEPLOY_GITHUB_TOKEN`** — Bearer token for **private** repos (public `ZanzyTHEbar/coder-opencode-sandbox` does not need it). Expose it in **Coolify** / `.env` and ensure **`docker-compose.yml`** passes it into the `coder` service (same as other `POST_DEPLOY_*` vars).
+Optional: **`POST_DEPLOY_GITHUB_TOKEN`** — Bearer token for **private** repos. Expose via **Coolify** / `.env`; **`docker-compose.yml`** passes it through.
 
-**Coolify env:** set `POST_DEPLOY_TEMPLATE_SOURCE=auto` (or leave unset) so redeploys are **self-healing** without manually syncing `/data/coolify/applications/.../template/`.
+**When to use `auto`:** Short-term workaround if you cannot get Coolify to refresh the app directory yet; prefer fixing **git pull + full deploy** so **`mount`** stays correct.
 
 ### 3. Post-deployment command
 
@@ -209,7 +211,7 @@ wc -c /data/coolify/applications/<uuid>/template/main.tf
 
 A current template should **include both strings** and **`main.tf`** should be on the order of **~9–10 KiB** (single-file `main.tf`; older layouts used `variables.tf`).
 
-**Fix:** Default **`POST_DEPLOY_TEMPLATE_SOURCE=auto`** (see § above) so post-deploy **fetches from GitHub** when the bind mount is stale. Optionally force Coolify to **pull latest Git** so the host directory matches `main`. **`mount`** mode still fails loud if markers are missing.
+**Fix:** Prefer **refreshing the Coolify application checkout** (git pull + full deploy) so **`./template`** on the host matches **`main`**. Default **`POST_DEPLOY_TEMPLATE_SOURCE=mount`** uses that tree only. Use **`auto`** only as a temporary workaround to fetch from GitHub if the checkout cannot be fixed yet.
 
 **Legacy:** `POST_DEPLOY_SKIP_TEMPLATE_VERIFY=1` only affects strict **`mount`** mode (not recommended).
 
