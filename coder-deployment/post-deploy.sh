@@ -2,7 +2,8 @@
 # Post-deployment script: register/update the opencode-sandbox template in Coder.
 # Runs inside the Coder container when Coolify runs the post-deploy command.
 # Requires: CODER_URL (default http://127.0.0.1:4099), CODER_TOKEN (set in Coolify env).
-# Template is at /templates (mounted from repo template/). Uses our GHCR sandbox image.
+# Optional: SANDBOX_IMAGE — must be in compose environment: for Coolify to pass it through.
+# Template is at /templates (mounted from repo template/).
 set -e
 
 CODER_URL="${CODER_URL:-http://127.0.0.1:4099}"

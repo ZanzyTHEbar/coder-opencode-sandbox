@@ -5,7 +5,8 @@
 services:
   coder:
     image: ghcr.io/coder/coder:latest
-    command: server
+    # Do not set command: server — the image ENTRYPOINT is already ["/opt/coder", "server"].
+    # Adding command: server becomes "/opt/coder server server" and fails with "unrecognized subcommand server".
     environment:
       CODER_ACCESS_URL: ${CODER_ACCESS_URL:-https://dev.example.com}
       CODER_HTTP_ADDRESS: "0.0.0.0:4099"
@@ -22,6 +23,8 @@ services:
       # For post-deploy template push (Coolify): set CODER_URL + CODER_TOKEN in Coolify env.
       CODER_URL: ${CODER_URL:-http://127.0.0.1:4099}
       CODER_TOKEN: ${CODER_TOKEN:-}
+      # Must appear here so Coolify injects it into the container for post-deploy.sh (same default as post-deploy.sh).
+      SANDBOX_IMAGE: ${SANDBOX_IMAGE:-ghcr.io/zanzythebar/coder-opencode-sandbox:latest}
     volumes:
       - coder-data:/home/coder/.coder
       - /var/run/docker.sock:/var/run/docker.sock
