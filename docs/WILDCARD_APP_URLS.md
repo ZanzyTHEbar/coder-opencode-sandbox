@@ -50,7 +50,13 @@ Or use CNAME:
 
 ---
 
-## 3. TLS
+## 3. Edge reverse proxy (Pangolin / Traefik)
+
+If **`dev.example.com`** is fronted by **Pangolin** (Traefik on a jumpbox), add routers so **`*.dev.example.com`** uses the **same backend** as **`dev.example.com`**. See **[PANGOLIN_TRAEFIK_WILDCARD.md](PANGOLIN_TRAEFIK_WILDCARD.md)** for the pattern used on DragonServer (`HostRegexp` + reuse **`15-Coder-service@http`**, wildcard cert on **`*.dev.<domain>`**).
+
+---
+
+## 4. TLS
 
 Wildcard app URLs require TLS for the wildcard host. Two common approaches:
 
@@ -75,7 +81,7 @@ Use a single cert that covers both the main host and `*.dev.example.com` (SANs o
 
 ---
 
-## 4. Checklist
+## 5. Checklist
 
 1. **DNS:** `*.dev.example.com` (and main host) resolve to Coder or your proxy.
 2. **TLS:** Wildcard (or multi-SAN) cert in place; either at reverse proxy (Option A) or Coder (Option B).
@@ -86,7 +92,7 @@ After that, workspace app URLs (e.g. OpenCode) can use the stable subdomain patt
 
 ---
 
-## 5. Troubleshooting
+## 6. Troubleshooting
 
 - **App opens in dashboard but not at wildcard URL:** Confirm DNS and TLS for the wildcard host; confirm `CODER_WILDCARD_ACCESS_URL` and that Coder was restarted.
 - **Certificate errors:** Ensure the cert’s CN or SANs include the wildcard (e.g. `*.dev.example.com`) and that clients are using the same hostname.
