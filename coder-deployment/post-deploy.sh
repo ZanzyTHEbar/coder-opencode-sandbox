@@ -3,12 +3,13 @@
 # Runs inside the Coder container when Coolify runs the post-deploy command.
 # Requires: CODER_URL (default http://127.0.0.1:4099), CODER_TOKEN (set in Coolify env).
 # Optional: SANDBOX_IMAGE — must be in compose environment: for Coolify to pass it through.
-# Template is at /templates (mounted from repo template/).
+# Optional: TEMPLATE_DIR — default /templates (mount); use when bind mount is empty (e.g. Coolify helper).
 set -e
 
 CODER_URL="${CODER_URL:-http://127.0.0.1:4099}"
 export CODER_URL
 SANDBOX_IMAGE="${SANDBOX_IMAGE:-ghcr.io/zanzythebar/coder-opencode-sandbox:latest}"
+TEMPLATE_DIR="${TEMPLATE_DIR:-/templates}"
 
 if [ -z "${CODER_TOKEN:-}" ]; then
   echo "CODER_TOKEN not set; skipping template push. Set it in Coolify env to automate." >&2
@@ -21,7 +22,7 @@ export CODER_SESSION_TOKEN="${CODER_TOKEN}"
 max=12
 i=0
 while [ "$i" -lt "$max" ]; do
-  if coder templates push opencode-sandbox -d /templates --variable "sandbox_image=${SANDBOX_IMAGE}" -y 2>/dev/null; then
+  if coder templates push opencode-sandbox -d "$TEMPLATE_DIR" --variable "sandbox_image=${SANDBOX_IMAGE}" -y 2>/dev/null; then
     echo "Template opencode-sandbox pushed successfully."
     exit 0
   fi

@@ -34,19 +34,23 @@ Optional: **SANDBOX_IMAGE** in Coolify to override the workspace sandbox image u
 
 ### 3. Post-deployment command
 
-In Coolify, open the Coder app → **Advanced** (or the section where pre/post-deploy commands are configured) and set:
+In Coolify, open the Coder app → **Advanced** (or the section where pre/post-deploy commands are configured) and set **one** of the following.
 
-**Post-deployment command:**
+**Option A — Use mounted script (if bind mounts work):**
 
 ```bash
 /deploy/post-deploy.sh
 ```
 
-This script runs inside the Coder container. It uses `CODER_URL` and `CODER_TOKEN` from the container env, waits for the Coder API to be ready, then runs:
+**Option B — Fetch and run (use when `/deploy/post-deploy.sh: not found`):**
 
-`coder templates push opencode-sandbox -d /templates --variable sandbox_image=... -y`
+Coolify runs `docker compose` from inside a helper container, so bind mounts like `.:/deploy` can resolve to paths that don’t exist on the Docker host, leaving `/deploy` empty. Use this command so the script and template are fetched at run time:
 
-So the template in Coder is created or updated on every deploy.
+```bash
+sh -c 'cd /tmp && curl -sSL -o r.tar.gz "https://github.com/ZanzyTHEbar/coder-opencode-sandbox/archive/refs/heads/main.tar.gz" && EXTRACTED=$(tar -tzf r.tar.gz | head -1 | cut -d/ -f1) && tar -xzf r.tar.gz && export TEMPLATE_DIR="/tmp/$EXTRACTED/template" && curl -sSL "https://raw.githubusercontent.com/ZanzyTHEbar/coder-opencode-sandbox/main/coder-deployment/post-deploy.sh" | sh'
+```
+
+The script uses `CODER_URL`, `CODER_TOKEN`, and `SANDBOX_IMAGE` from the container env, waits for the Coder API, then runs `coder templates push opencode-sandbox -d "$TEMPLATE_DIR" --variable sandbox_image=... -y`.
 
 ### 4. First deploy (token bootstrap)
 
@@ -80,6 +84,7 @@ Coolify must run `docker compose` with the project root such that `../template` 
 
 ## Troubleshooting
 
-- **Template not updated after deploy** — Ensure `CODER_TOKEN` is set in Coolify and the post-deploy command is exactly `/deploy/post-deploy.sh`. Check Coolify logs for the post-deploy step; the script logs “Template opencode-sandbox pushed successfully.” on success.
+- **`/deploy/post-deploy.sh: not found`** — Coolify runs compose from a helper container, so the `.:/deploy` bind mount is often empty in the Coder container. Use **Option B** in §3 (fetch-and-run) as the post-deployment command instead of `/deploy/post-deploy.sh`.
+- **Template not updated after deploy** — Ensure `CODER_TOKEN` is set in Coolify and the post-deploy command runs the script (Option A or B). Check Coolify logs; the script logs “Template opencode-sandbox pushed successfully.” on success.
 - **Post-deploy fails: “connection refused”** — Coder server may not be ready yet. The script retries for up to ~1 minute; if Coder starts slowly, increase the retry count in `post-deploy.sh` or add a longer initial sleep.
-- **Permission denied: /deploy/post-deploy.sh** — Ensure `post-deploy.sh` is committed with execute bit (`chmod +x coder-deployment/post-deploy.sh`).
+- **Permission denied: /deploy/post-deploy.sh** — Use Option B (fetch-and-run) so the script is not executed from the mount.
