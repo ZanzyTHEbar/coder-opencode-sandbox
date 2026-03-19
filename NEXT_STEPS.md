@@ -46,4 +46,4 @@ When prompted (or in the dashboard), set **sandbox_image** to your image (e.g. `
 
 ---
 
-See [docs/OPERATOR.md](docs/OPERATOR.md) for full operator guidance and [docs/USER.md](docs/USER.md) for end-user instructions.
+See [docs/OPERATOR.md](docs/OPERATOR.md) for full operator guidance and [docs/USER.md](docs/USER.md) for end-user instructions. For backlog and future work (persistence backup, wildcard app URLs, template versioning, smoke-test automation), see [docs/SAVE_STATE_AND_BACKLOG.md](docs/SAVE_STATE_AND_BACKLOG.md).

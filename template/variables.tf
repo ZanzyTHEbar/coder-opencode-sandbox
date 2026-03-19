@@ -1,7 +1,9 @@
-# Optional Docker socket (e.g. for remote Docker).
+# Reserved for future use: per-template Docker host override.
+# Today the provisioner uses the Coder deployment's DOCKER_HOST (e.g. set in coder-deployment/docker-compose.yml).
+# Set DOCKER_HOST on the Coder server if workspaces must use a remote Docker daemon.
 variable "docker_socket" {
   default     = ""
-  description = "Docker socket URI. Leave empty to use default."
+  description = "Reserved. Docker is configured via Coder deployment (DOCKER_HOST). Leave empty."
   type        = string
 }
 

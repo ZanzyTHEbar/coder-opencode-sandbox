@@ -38,7 +38,8 @@ jobs:
         run: |
           echo "sha=${GITHUB_SHA}" >> $GITHUB_OUTPUT
           echo "short_sha=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
-          OPENCODE_VER=$(grep -m1 'ARG OPENCODE_VERSION=' image/Dockerfile | sed 's/.*=//')
+          # Use last ARG OPENCODE_VERSION= (build stage) when Dockerfile has multiple.
+          OPENCODE_VER=$(grep 'ARG OPENCODE_VERSION=' image/Dockerfile | tail -1 | sed 's/.*=//')
           echo "opencode_version=${OPENCODE_VER}" >> $GITHUB_OUTPUT
           IMAGE_BASE=$(echo "${{ env.REGISTRY }}/${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
           echo "image_base=${IMAGE_BASE}" >> $GITHUB_OUTPUT

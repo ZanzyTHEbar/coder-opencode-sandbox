@@ -6,7 +6,7 @@ Terraform template for Coder: one workspace = one container + one persistent vol
 
 | Name | Default | Description |
 |------|---------|-------------|
-| `docker_socket` | `""` | Docker socket URI for the provisioner (empty = default). |
+| `docker_socket` | `""` | Reserved. Use DOCKER_HOST on the Coder deployment for remote Docker. |
 | `sandbox_image` | `opencode-sandbox:latest` | Docker image for the sandbox (build from `../image`). |
 
 ## Create template
@@ -24,3 +24,7 @@ Set `sandbox_image` to your built image (e.g. `opencode-sandbox:latest` or `your
 - Volume name: `coder-${data.coder_workspace.me.id}-home` (immutable id only).
 - Mount: `/home/coder` (read-write). All OpenCode and user state under home persists across stop/start.
 - Lifecycle: `ignore_changes = all` on the volume so Terraform does not recreate it.
+
+## Container name
+
+- Container name is derived from owner and workspace name, sanitized for Docker (`[a-zA-Z0-9_.-]`, max 63 chars): spaces/slashes/backslashes become dashes, then truncated.

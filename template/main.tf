@@ -39,12 +39,19 @@ resource "docker_image" "sandbox" {
 
 # ------------------------------------------------------------------------------
 # Workspace container: only exists when workspace is started.
+# Container name must match [a-zA-Z0-9][a-zA-Z0-9_.-]* (max 63 chars).
 # ------------------------------------------------------------------------------
+
+locals {
+  # Docker container name: [a-zA-Z0-9][a-zA-Z0-9_.-]*, max 63 chars. Sanitize and truncate.
+  _sanitized = replace(replace(replace("${data.coder_workspace_owner.me.name}-${data.coder_workspace.me.name}", " ", "-"), "/", "-"), "\\", "-")
+  container_name = "coder-${substr(local._sanitized, 0, min(57, length(local._sanitized)))}"
+}
 
 resource "docker_container" "workspace" {
   count = data.coder_workspace.me.start_count
   image = docker_image.sandbox.image_id
-  name  = "coder-${data.coder_workspace_owner.me.name}-${data.coder_workspace.me.name}"
+  name  = local.container_name
 
   hostname = data.coder_workspace.me.name
 
@@ -81,8 +88,8 @@ resource "coder_agent" "main" {
       touch "$HOME/.init_done"
     fi
 
-    # Start OpenCode server in background (port 4096; Coder app will proxy to it).
-    (opencode serve --hostname 0.0.0.0 --port 4096 &)
+    # Start OpenCode web UI in background (port 4096; Coder app will proxy to it).
+    (opencode web --hostname 0.0.0.0 --port 4096 &)
 
     # Agent is ready.
   EOT
@@ -132,6 +139,7 @@ resource "coder_app" "opencode" {
   icon         = "/icon/code.svg"
 
   healthcheck {
+    # OpenCode web serves OpenAPI spec at /doc; 2xx indicates server is up.
     url       = "http://localhost:4096/doc"
     interval  = 10
     threshold = 15

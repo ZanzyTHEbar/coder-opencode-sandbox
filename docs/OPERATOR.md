@@ -22,9 +22,18 @@ See [authentik/OIDC_SETUP.md](authentik/OIDC_SETUP.md) for step-by-step Authenti
 
 - Workspace templates use the Docker provider to create containers and volumes. Coder’s provisioner must have access to the Docker socket (or a remote Docker host).
 - In Docker Compose, mount `/var/run/docker.sock` into the Coder container and set **CODER_PROVISIONER_DAEMON=true** and **DOCKER_HOST** as needed.
-- Ensure the template variable **docker_socket** is set if Coder runs remotely (e.g. `unix:///var/run/docker.sock` on the host that runs workspaces).
+- Configure Docker at the Coder deployment: set **DOCKER_HOST** in the Coder server environment (e.g. in Compose) so the provisioner can reach the Docker daemon that runs workspace containers. The template variable `docker_socket` is reserved for future use.
 
 ## 4. Build and set the sandbox image
+
+**Option A — Use the pre-built image (recommended)**  
+On every push to `main`, [GitHub Actions](../.github/workflows/build-push-image.yml) builds and pushes the image to GHCR. Use:
+
+- **`ghcr.io/<owner>/coder-opencode-sandbox:latest`** (e.g. `ghcr.io/zanzythebar/coder-opencode-sandbox:latest`)
+
+Set this as the template variable **sandbox_image**. After the first workflow run, set the package to **Public** in the repo’s Packages settings. See the [main README](../README.md#pre-built-image-ghcr) for details.
+
+**Option B — Build locally**
 
 - From the repo root:
   ```bash
@@ -43,7 +52,7 @@ See [authentik/OIDC_SETUP.md](authentik/OIDC_SETUP.md) for step-by-step Authenti
   coder login  # to your Coder URL
   coder templates create opencode-sandbox --directory template
   ```
-- When prompted (or in the dashboard), set the template variable **sandbox_image** to the image name (e.g. `opencode-sandbox:latest` or `your-registry/opencode-sandbox:latest`).
+- When prompted (or in the dashboard), set the template variable **sandbox_image** to the image name (e.g. `ghcr.io/<owner>/coder-opencode-sandbox:latest` or `opencode-sandbox:latest` if built locally).
 - Optionally set **docker_socket** if you use a non-default Docker host.
 
 ## 6. Persistence and lifecycle
@@ -58,5 +67,5 @@ See [authentik/OIDC_SETUP.md](authentik/OIDC_SETUP.md) for step-by-step Authenti
 ## 8. Troubleshooting
 
 - **Agent never connects:** Ensure the container runs the agent init script (template sets `command = ["sh", "-c", coder_agent.main.init_script]`) and has `CODER_AGENT_TOKEN` in env. Check Coder logs and container logs.
-- **OpenCode app 502 / unhealthy:** The agent’s startup_script starts `opencode serve --hostname 0.0.0.0 --port 4096` in the background. Ensure OpenCode is installed in the image and the healthcheck URL `http://localhost:4096/doc` is reachable from inside the container.
+- **OpenCode app 502 / unhealthy:** The agent’s startup_script starts `opencode web --hostname 0.0.0.0 --port 4096` in the background. Ensure OpenCode is installed in the image and the healthcheck URL `http://localhost:4096/doc` is reachable from inside the container.
 - **Volume not persisting:** Volume name must use `data.coder_workspace.me.id` only (immutable). Do not use owner or workspace name in the volume name. Ensure `lifecycle { ignore_changes = all }` is set on the volume resource.
