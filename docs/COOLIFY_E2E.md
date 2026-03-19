@@ -88,7 +88,7 @@ Post-deploy registers the Terraform template with **`coder templates push`**. Th
 | **`mount`** | Only the bind mount — **fail** if sanity checks fail (strict). Use when you never want outbound GitHub fetches. |
 | **`github`** | **Always** fetch from GitHub (`POST_DEPLOY_GITHUB_REPO` / `POST_DEPLOY_GITHUB_REF` / `POST_DEPLOY_GITHUB_REF_TYPE`) and ignore the mount. |
 
-Optional: **`POST_DEPLOY_GITHUB_TOKEN`** — Bearer token for **private** repos (public `ZanzyTHEbar/coder-opencode-sandbox` does not need it).
+Optional: **`POST_DEPLOY_GITHUB_TOKEN`** — Bearer token for **private** repos (public `ZanzyTHEbar/coder-opencode-sandbox` does not need it). Expose it in **Coolify** / `.env` and ensure **`docker-compose.yml`** passes it into the `coder` service (same as other `POST_DEPLOY_*` vars).
 
 **Coolify env:** set `POST_DEPLOY_TEMPLATE_SOURCE=auto` (or leave unset) so redeploys are **self-healing** without manually syncing `/data/coolify/applications/.../template/`.
 

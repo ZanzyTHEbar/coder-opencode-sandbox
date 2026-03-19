@@ -9,7 +9,7 @@
 #   github         — Always fetch from GitHub (ignore mount).
 #
 # Requires: CODER_URL (default http://127.0.0.1:4099), CODER_TOKEN (set in Coolify env).
-# Optional: SANDBOX_IMAGE, POST_DEPLOY_GITHUB_REPO, POST_DEPLOY_GITHUB_REF, POST_DEPLOY_GITHUB_REF_TYPE
+# Optional: SANDBOX_IMAGE, POST_DEPLOY_GITHUB_REPO, POST_DEPLOY_GITHUB_REF, POST_DEPLOY_GITHUB_REF_TYPE, POST_DEPLOY_GITHUB_TOKEN
 #
 # Coolify: post-deployment command MUST run in the **coder** service. See docs/COOLIFY_E2E.md.
 set -e
