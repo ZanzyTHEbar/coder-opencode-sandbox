@@ -23,6 +23,7 @@ Set `sandbox_image` to your built image (e.g. `opencode-sandbox:latest` or `your
 
 - Volume name: `coder-${data.coder_workspace.me.id}-home` (immutable id only).
 - Mount: `/home/coder` (read-write). All OpenCode and user state under home persists across stop/start.
+- **First start:** Docker mounts new volumes as **root**; the agent runs as **`coder`**. The startup script runs `sudo chown -R coder:coder "$HOME"` when `$HOME` is not writable so `~/workspace` can be created (image includes passwordless sudo for `coder`).
 - Lifecycle: `ignore_changes = all` on the volume so Terraform does not recreate it.
 
 ## Container name

@@ -81,6 +81,11 @@ resource "coder_agent" "main" {
     set -e
     export HOME=/home/coder
 
+    # New Docker volumes mount as root:root; agent runs as `coder` and cannot mkdir until ownership is fixed.
+    if [ ! -w "$HOME" ]; then
+      sudo chown -R coder:coder "$HOME"
+    fi
+
     # Prepare home with defaults on first start (volume was empty).
     if [ ! -f "$HOME/.init_done" ]; then
       cp -rT /etc/skel "$HOME" 2>/dev/null || true
