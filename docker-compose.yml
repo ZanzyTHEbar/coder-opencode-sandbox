@@ -59,6 +59,8 @@ services:
       # Quoted so Compose always passes a string to Coder (bootstrap may set false in .env).
       CODER_DISABLE_PASSWORD_AUTH: "${CODER_DISABLE_PASSWORD_AUTH:-true}"
       CODER_PROVISIONER_DAEMON: "true"
+      # Helps workspace agents / DERP behind reverse proxies (Traefik, Coolify).
+      CODER_DERP_FORCE_WEBSOCKETS: "${CODER_DERP_FORCE_WEBSOCKETS:-true}"
       DOCKER_HOST: "unix:///var/run/docker.sock"
       CODER_URL: ${CODER_URL:-http://127.0.0.1:4099}
       CODER_TOKEN: ${CODER_TOKEN:-}

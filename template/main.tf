@@ -61,8 +61,23 @@ resource "docker_container" "workspace" {
     read_only      = false
   }
 
+  # Same pattern as Coder's docker template: agent init script may reference 127.0.0.1/localhost; map to host gateway.
+  # https://github.com/coder/coder/blob/main/examples/templates/docker/main.tf
+  host {
+    host = "host.docker.internal"
+    ip   = "host-gateway"
+  }
+
+  dynamic "networks_advanced" {
+    for_each = var.workspace_docker_network != "" ? [var.workspace_docker_network] : []
+    content {
+      name = networks_advanced.value
+    }
+  }
+
   # Run Coder agent init script (downloads and starts the agent; agent runs startup_script).
-  command = ["sh", "-c", coder_agent.main.init_script]
+  # Terraform-compatible replace (no regexreplace required); mirrors upstream docker template intent.
+  command = ["sh", "-c", replace(replace(coder_agent.main.init_script, "127.0.0.1", "host.docker.internal"), "localhost", "host.docker.internal")]
   env = [
     "CODER_AGENT_TOKEN=${coder_agent.main.token}"
   ]
@@ -93,8 +108,8 @@ resource "coder_agent" "main" {
       touch "$HOME/.init_done"
     fi
 
-    # Start OpenCode web UI in background (port 4096; Coder app will proxy to it).
-    (opencode web --hostname 0.0.0.0 --port 4096 &)
+    # Bind loopback only (Coder app proxies to localhost). Avoids binding 0.0.0.0 (OpenCode "unsecured" warning).
+    (opencode web --hostname 127.0.0.1 --port 4096 &)
 
     # Wait for OpenCode to be ready so the Coder app healthcheck does not flake.
     for i in $(seq 1 30); do
