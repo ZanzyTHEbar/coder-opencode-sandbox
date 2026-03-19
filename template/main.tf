@@ -67,15 +67,15 @@ locals {
   _sanitized     = replace(replace(replace("${data.coder_workspace_owner.me.name}-${data.coder_workspace.me.name}", " ", "-"), "/", "-"), "\\", "-")
   container_name = "coder-${substr(local._sanitized, 0, min(57, length(local._sanitized)))}"
 
-  # Must run *before* the rest of coder_agent.main.init_script: that script starts the agent, which can
-  # touch $HOME before startup_script runs. startup_script alone is too late for chown/mkdir.
-  # Use /usr/bin/sudo so PATH cannot hide sudo (image: Dockerfile sudo + NOPASSWD).
+  # Must run *before* the rest of coder_agent.main.init_script (agent touches $HOME early).
+  # Run as root (see docker_container.user): named volumes are root:root — sudo can still fail in some
+  # Docker/seccomp setups; real root avoids that. Coder's init then continues (agent runs as non-root).
   workspace_volume_bootstrap = <<-EOT
 set -e
 export HOME=/home/coder
-/usr/bin/sudo chown -R coder:coder /home/coder
-/usr/bin/sudo mkdir -p /home/coder/workspace
-/usr/bin/sudo chown coder:coder /home/coder/workspace
+chown -R coder:coder /home/coder
+mkdir -p /home/coder/workspace
+chown -R coder:coder /home/coder/workspace
 
 EOT
 }
@@ -84,6 +84,9 @@ resource "docker_container" "workspace" {
   count = data.coder_workspace.me.start_count
   image = docker_image.sandbox.image_id
   name  = local.container_name
+
+  # Override image USER (coder): bootstrap must fix volume ownership as real root; sudo is unreliable here.
+  user = "0:0"
 
   hostname = data.coder_workspace.me.name
 
@@ -130,12 +133,12 @@ resource "coder_agent" "main" {
     set -e
     export HOME=/home/coder
 
-    # Ownership and workspace/ were fixed in init_script (see docker_container command prepend).
+    # Ensure workspace dir exists even if .init_done was set without it (idempotent).
+    mkdir -p "$HOME/workspace"
 
     # Prepare home with defaults on first start (volume was empty).
     if [ ! -f "$HOME/.init_done" ]; then
       cp -rT /etc/skel "$HOME" 2>/dev/null || true
-      mkdir -p "$HOME/workspace"
       touch "$HOME/.init_done"
     fi
 

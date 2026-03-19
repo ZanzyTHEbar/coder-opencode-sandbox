@@ -39,7 +39,7 @@ RUN useradd -m -s /bin/bash -d /home/coder -G sudo coder && \
 RUN mkdir -p /etc/skel/workspace && \
     echo 'export HOME=/home/coder' >> /etc/skel/.bashrc
 
-# Container runs as coder; Coder template mounts volume at /home/coder.
+# Default user for local docker run; Coder workspace template sets docker_container user=0:0 for volume bootstrap then agent runs as normal.
 USER coder
 WORKDIR /home/coder
 
