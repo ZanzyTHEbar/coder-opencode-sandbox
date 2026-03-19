@@ -1,41 +1,30 @@
 # Next steps
 
-Follow these in order to go from zero to a working OpenCode sandbox on Coder.
+Follow these in order to go from zero to a working OpenCode sandbox on Coder. The flow is **e2e automated**: our Terraform template and our GHCR Docker image are the single source of truth; one script registers the template in Coder.
 
-## 1. Image: use pre-built (GHCR) or build locally
+**E2E via Coolify (post-deploy):** [docs/COOLIFY_E2E.md](docs/COOLIFY_E2E.md) · **Overview:** [docs/E2E_AUTOMATION.md](docs/E2E_AUTOMATION.md)
 
-**Option A — Use the pre-built public image (recommended)**  
-On every push to `main`, [GitHub Actions](.github/workflows/build-push-image.yml) builds and pushes to GHCR. Use:
+## 1. Image (automated by CI)
+
+On every push to `main`, [GitHub Actions](.github/workflows/build-push-image.yml) builds [image/Dockerfile](image/Dockerfile) and pushes to GHCR. The template [template/variables.tf](template/variables.tf) defaults **sandbox_image** to that image:
 
 ```text
-ghcr.io/<owner>/coder-opencode-sandbox:latest
+ghcr.io/zanzythebar/coder-opencode-sandbox:latest
 ```
 
-(e.g. `ghcr.io/zanzythebar/coder-opencode-sandbox:latest`). Set this as the template variable `sandbox_image`. After the first run, make the package **Public** in the repo’s Packages settings.
-
-**Option B — Build locally**
-
-```bash
-cd image && docker build -t opencode-sandbox:latest .
-```
-
-If Coder runs on another host, push to your own registry and set `sandbox_image` to that image.
+No local build needed. After the first workflow run, set the package to **Public** in the repo's Packages settings.
 
 ## 2. Deploy Coder and configure Authentik
 
-- Use [coder-deployment/](coder-deployment/) (Compose + `.env.example`) or [Coder’s install docs](https://coder.com/docs/install).
-- Set **CODER_ACCESS_URL** to your public URL.
-- Configure OIDC with Authentik: [docs/authentik/OIDC_SETUP.md](docs/authentik/OIDC_SETUP.md).
-- Ensure Coder’s provisioner can reach Docker (socket or DOCKER_HOST).
+- Deploy from [coder-deployment/](coder-deployment/) (Compose or Coolify with `base-directory: coder-deployment`).
+- Set **CODER_ACCESS_URL** and OIDC env vars; see [docs/authentik/OIDC_SETUP.md](docs/authentik/OIDC_SETUP.md). Run [scripts/create_authentik_oidc_coder.py](scripts/create_authentik_oidc_coder.py) once if using Authentik.
+- Ensure Coder's provisioner can reach Docker (socket or DOCKER_HOST).
 
-## 3. Create the template
+## 3. Register the template (Coolify post-deploy or manual)
 
-```bash
-coder login   # to your Coder URL
-coder templates create opencode-sandbox --directory template
-```
+**Option A — Coolify (e2e):** Set the app’s **Post-deployment command** to `/deploy/post-deploy.sh` and set **CODER_TOKEN** in Coolify env (create token in Coder after first deploy). Every deploy will push the template automatically. See [docs/COOLIFY_E2E.md](docs/COOLIFY_E2E.md).
 
-When prompted (or in the dashboard), set **sandbox_image** to your image (e.g. `ghcr.io/<owner>/coder-opencode-sandbox:latest`, or `opencode-sandbox:latest` if you built locally).
+**Option B — Manual (one script):** From the repo root: `CODER_URL=https://coder.example.com CODER_TOKEN=<token> ./scripts/bootstrap-template.sh`
 
 ## 4. Smoke-test
 

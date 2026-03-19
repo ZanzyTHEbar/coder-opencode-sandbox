@@ -45,15 +45,10 @@ Set this as the template variable **sandbox_image**. After the first workflow ru
   docker push your-registry/opencode-sandbox:latest
   ```
 
-## 5. Create the template in Coder
+## 5. Create/update the template in Coder (e2e via Coolify)
 
-- Create the template from the `template/` directory:
-  ```bash
-  coder login  # to your Coder URL
-  coder templates create opencode-sandbox --directory template
-  ```
-- When prompted (or in the dashboard), set the template variable **sandbox_image** to the image name (e.g. `ghcr.io/<owner>/coder-opencode-sandbox:latest` or `opencode-sandbox:latest` if built locally).
-- Optionally set **docker_socket** if you use a non-default Docker host.
+- **Coolify:** Set **Post-deployment command** to `/deploy/post-deploy.sh` and set **CODER_TOKEN** in the app env. Every deploy will run the script inside the Coder container and push the template. See [COOLIFY_E2E.md](COOLIFY_E2E.md).
+- **Manual:** Run `CODER_URL=https://coder.example.com CODER_TOKEN=<token> ./scripts/bootstrap-template.sh` from the repo root. Override image with `SANDBOX_IMAGE=... ./scripts/bootstrap-template.sh` if needed.
 
 ## 6. Persistence and lifecycle
 
