@@ -2,18 +2,24 @@
 
 Follow these in order to go from zero to a working OpenCode sandbox on Coder.
 
-## 1. Build the image
+## 1. Image: use pre-built (GHCR) or build locally
+
+**Option A — Use the pre-built public image (recommended)**  
+On every push to `main`, [GitHub Actions](.github/workflows/build-push-image.yml) builds and pushes to GHCR. Use:
+
+```text
+ghcr.io/<owner>/coder-opencode-sandbox:latest
+```
+
+(e.g. `ghcr.io/zanzythebar/coder-opencode-sandbox:latest`). Set this as the template variable `sandbox_image`. After the first run, make the package **Public** in the repo’s Packages settings.
+
+**Option B — Build locally**
 
 ```bash
 cd image && docker build -t opencode-sandbox:latest .
 ```
 
-If Coder runs on another host (e.g. a server), push to a registry and use that image name in the template:
-
-```bash
-docker tag opencode-sandbox:latest your-registry/opencode-sandbox:latest
-docker push your-registry/opencode-sandbox:latest
-```
+If Coder runs on another host, push to your own registry and set `sandbox_image` to that image.
 
 ## 2. Deploy Coder and configure Authentik
 
@@ -29,7 +35,7 @@ coder login   # to your Coder URL
 coder templates create opencode-sandbox --directory template
 ```
 
-When prompted (or in the dashboard), set **sandbox_image** to your image (e.g. `opencode-sandbox:latest` or `your-registry/opencode-sandbox:latest`).
+When prompted (or in the dashboard), set **sandbox_image** to your image (e.g. `ghcr.io/<owner>/coder-opencode-sandbox:latest`, or `opencode-sandbox:latest` if you built locally).
 
 ## 4. Smoke-test
 

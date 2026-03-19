@@ -2,6 +2,10 @@
 
 Docker image used by the Coder template: Ubuntu + OpenCode server + git/curl. The Coder agent is started at runtime via the template's `init_script` (not baked into the image).
 
+## Pre-built image (GHCR)
+
+On push to `main`, [GitHub Actions](../.github/workflows/build-push-image.yml) builds and pushes to `ghcr.io/<owner>/coder-opencode-sandbox` with tags `latest`, `<short_sha>`, and `v<opencode_version>`. Use that image as `sandbox_image` to skip building locally. Make the package **Public** in the repo’s Packages settings after the first run.
+
 ## Build
 
 ```bash
