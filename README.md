@@ -22,12 +22,7 @@ Per-user, isolated OpenCode sandboxes behind OIDC. Users log in via Authentik an
 
 ## Pre-built image (GHCR)
 
-A public image is built and published via [GitHub Actions](.github/workflows/build-push-image.yml) on every push to `main`:
-
-- **`ghcr.io/<owner>/coder-opencode-sandbox:latest`** — use this as the template variable `sandbox_image` to skip building locally.
-- Tags: `latest`, `<short_sha>`, `v<opencode_version>` (e.g. `v1.2.27`).
-
-After the first workflow run, set the package to **Public**: repo → **Packages** → **coder-opencode-sandbox** → **Package settings** → **Change visibility**.
+A public image is built and published via [GitHub Actions](.github/workflows/build-push-image.yml) on every push to `main`. Use the image as the template variable `sandbox_image` to skip building locally.
 
 ## Quick start (operators)
 
