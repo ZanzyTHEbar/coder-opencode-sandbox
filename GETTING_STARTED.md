@@ -12,8 +12,6 @@ On every push to `main`, [GitHub Actions](.github/workflows/build-push-image.yml
 ghcr.io/zanzythebar/coder-opencode-sandbox:latest
 ```
 
-You do not need a local build unless you want to customize the image. After the first workflow run, set the package to **Public** in the repo's Packages settings.
-
 ## 2. Deploy Coder and configure Authentik
 
 - Deploy from repo root using [docker-compose.yml](docker-compose.yml), or use Coolify with base directory `.` so `template/` and `coder-deployment/` bind-mount correctly.

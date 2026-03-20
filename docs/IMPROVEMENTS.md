@@ -1,4 +1,4 @@
-# Improvements: what we're missing and how to do better
+# Improvements and architecture roadmap
 
 This document enumerates current gaps, desired improvements, and priority areas to make the project more robust, operator-friendly, and maintainable over time.
 
@@ -106,20 +106,44 @@ This document enumerates current gaps, desired improvements, and priority areas 
 
 ---
 
-## 9. OpenCode defaults and first-run experience
+## 9. Workspace/project/server model
 
-**Gap:** The image ships without pre-configured OpenCode settings/providers; users must run `/connect` after first launch.
+**Gap:** The current template starts OpenCode from `~/workspace`, which still encourages a mental model of "one workspace = one OpenCode project". That is too narrow for how OpenCode actually works.
 
 **How to do better:**
 
-- Document in USER.md: "On first use, open OpenCode app and run `/connect` to link provider credentials."
-- Optionally, provide minimal config in `/etc/skel` (e.g., README or snippet in `~/.config/opencode`), but do not store secrets in the image.
+- Treat a **Coder workspace** as a persistent Ubuntu machine for one user.
+- Treat **OpenCode** as a server process running inside that machine.
+- Treat **projects** as directories on disk inside that machine, not as the workspace itself.
+- Make the default UX: **one workspace, many projects**.
+- Standardize a filesystem layout such as:
+  - `~/workspace/projects/*` for repo roots
+  - `~/workspace/scratch` for temporary work
+  - `~/workspace/shared` for non-repo material
+- Document that users can work with multiple repos and parent directories in the same OpenCode server.
 
-**Status:** USER.md can be extended; `/etc/skel` config is backlog.
+**Status:** Decision made. This should become the primary architecture documented in README, USER, OPERATOR, SAVE_STATE_AND_BACKLOG, and future template changes.
 
 ---
 
-## 10. Smoke-test automation
+## 10. Shared config vs project config
+
+**Gap:** The current direction uses `~/workspace/.opencode` as a managed link target, which works, but it couples shared config to a single workspace root. That is not the best long-term fit for multiple projects per workspace.
+
+**How to do better:**
+
+- Move shared org/user defaults toward:
+  - `OPENCODE_CONFIG_DIR`
+  - and/or `~/.config/opencode`
+- Reserve repo-local `.opencode` directories and `opencode.json` files for **project-specific** configuration.
+- Keep organization defaults, agents, commands, skills, and plugins outside the individual project root where practical.
+- Preserve project-level override behavior so repo-local config remains possible and natural.
+
+**Status:** Direction agreed. Current `~/workspace/.opencode` support is acceptable as an intermediate step, but should not be treated as the final architecture anchor.
+
+---
+
+## 11. Smoke-test automation
 
 **Gap:** No end-to-end check ensures that a workspace can be started, have persistent files, stop/start, etc.
 
@@ -131,7 +155,7 @@ This document enumerates current gaps, desired improvements, and priority areas 
 
 ---
 
-## 11. Encrypt-at-rest for persisted data
+## 12. Encrypt-at-rest for persisted data
 
 **Gap:** Workspace data in Docker volumes is not encrypted at rest, potentially exposing sensitive user or code data if the host filesystem is compromised.
 
@@ -145,48 +169,62 @@ This document enumerates current gaps, desired improvements, and priority areas 
 
 ---
 
-## 12. Support for user-created environment templates
+## 13. Multi-project UX inside a single workspace
 
-**Gap:** Only administrators can create or modify environment templates; users have no self-service mechanism to define and instantiate personalized workspace images.
+**Gap:** The repo does not yet clearly document or scaffold the intended multi-project workflow inside one workspace, even though this is the preferred user experience.
 
 **How to do better:**
 
-- Design a user-facing UI or CLI workflow for non-admins to define environment templates (via form, YAML, or Dockerfile-like descriptors) and instantiate workspaces on demand.
-- Document the procedures and add template examples to USER.md or a dedicated `USER_TEMPLATES.md`.
-- Consider permissions and controls so that user templates do not compromise host security or exceed resource allocations.
+- Make "one workspace, many projects" the default documented workflow.
+- Create or document canonical project locations such as `~/workspace/projects/<name>`.
+- Update USER.md to explain that a single OpenCode workspace can host many repos and directories.
+- Update smoke tests and onboarding docs to validate multiple project directories, not just one file in `/home/coder`.
+- Ensure the template does not assume the first repo cloned into `~/workspace` is the only meaningful project root.
 
-**Status:** Not yet supported; design/discussion needed, and UI/permission model must be scoped.
+**Status:** Approved as the preferred UX direction. Docs and future template refinements should align to this model.
 
 ---
 
-## 13. Hooks for user environment modification and rebuilds
+## 14. Hub-and-satellites mode (advanced)
 
-**Gap:** Users may want to customize their environments (install packages, change config) and recreate/rebuild workspaces with these modifications, but there is no support for environment modification hooks or user-driven rebuild pipelines.
+**Gap:** OpenCode supports interacting with multiple servers, but the repo does not define how that should map to multiple Coder workspaces.
 
 **How to do better:**
 
-- Provide hook mechanisms (pre-build/post-build or pre-start/post-start) allowing user-provided scripts to modify the Docker image or environment before workspace creation, or to trigger rebuilds after changes.
-- Offer a "Customize Environment" UI or CLI command that invokes these hooks, optionally capturing user scripts or changes and integrating them into future environment builds.
-- Document customization procedures in USER.md and OPERATOR.md, including rollback/reset guidance and safe rollback workflows.
+- Keep the default mode simple:
+  - every workspace runs its own OpenCode web UI
+  - every workspace is independently usable
+- Introduce a separate advanced concept:
+  - one designated workspace acts as a **hub**
+  - additional workspaces act as **satellite servers**
+- If implemented, satellites should use a headless server model (`opencode serve`) rather than being described as "TUI-only".
+- Treat this as a power-user / multi-machine workflow, not the baseline product experience.
+- Design explicit requirements before implementing:
+  - server discovery
+  - authentication
+  - routing/network reachability
+  - registration UX
+  - failure handling when the hub is unavailable
 
-**Status:** Not implemented; requires design and security review.
+**Status:** Approved conceptually as an advanced future mode. Not recommended as the default UX.
 
 ---
 
 ## Priority summary
 
-| Priority | Item                                     | Effort | Status / next step                    |
-|----------|------------------------------------------|--------|----------------------------------------|
-| P0       | Backup process documented                | Low    | Done: BACKUP.md                        |
-| P0       | Wildcard URLs documented                 | Low    | Done: WILDCARD_APP_URLS.md             |
-| P0       | Template versioning doc                  | Low    | Done: OPERATOR §9 + optional VERSION   |
-| P1       | Wait for OpenCode at startup             | Low    | Done: template startup_script          |
-| P1       | CI Terraform validate                    | Low    | Done: workflow job                     |
-| P2       | Resource limits (vars)                   | Medium | Backlog                                |
-| P2       | Observability subsection                 | Low    | Optional OPERATOR addition             |
-| P2       | Encrypt-at-rest for persisted data       | Medium | Backlog; operator and doc required     |
-| P3       | Multi-arch image                        | Medium | Backlog                                |
-| P3       | OpenCode first-run / skel                | Low    | USER.md + optional skel                |
-| P3       | Smoke-test automation                    | High   | Backlog                                |
-| P3       | User-created environment templates       | Medium | Backlog; design/permission required    |
-| P3       | User environment hooks and rebuilds      | High   | Backlog; design/specification needed   |
+| Priority | Item                                  | Effort | Status / next step                               |
+|----------|---------------------------------------|--------|--------------------------------------------------|
+| P0       | Backup process documented             | Low    | Done: BACKUP.md                                  |
+| P0       | Wildcard URLs documented              | Low    | Done: WILDCARD_APP_URLS.md                       |
+| P0       | Template versioning doc               | Low    | Done: OPERATOR §9 + VERSION                      |
+| P1       | Wait for OpenCode at startup          | Low    | Done: template startup_script                    |
+| P1       | CI Terraform validate                 | Low    | Done: workflow job                               |
+| P1       | Workspace/project/server model        | Medium | Decision made; docs should be updated to match   |
+| P1       | Multi-project UX in one workspace     | Medium | Approved direction; docs + template follow-up    |
+| P2       | Shared config vs project config split | Medium | Move toward `OPENCODE_CONFIG_DIR` / `~/.config`  |
+| P2       | Observability subsection              | Low    | Optional OPERATOR addition                       |
+| P2       | Resource limits (vars)                | Medium | Backlog                                          |
+| P2       | Encrypt-at-rest for persisted data    | Medium | Backlog; operator and doc required               |
+| P3       | Hub-and-satellites multi-server mode  | High   | Advanced mode; requires design and network model |
+| P3       | Multi-arch image                      | Medium | Backlog                                          |
+| P3       | Smoke-test automation                 | High   | Backlog                                          |
