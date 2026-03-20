@@ -184,8 +184,14 @@ resource "coder_agent" "main" {
       touch "$HOME/.init_done"
     fi
 
-    # Bind loopback only (Coder app proxies to localhost). You may still see a password warning until OpenCode is configured with OPENCODE_SERVER_PASSWORD (would require matching coder_app healthcheck auth).
-    (opencode web --hostname 127.0.0.1 --port 4096 &)
+    # Bind loopback only (Coder app proxies to localhost). Redirect output so the startup script can exit cleanly
+    # without Coder thinking the background child still owns stdout/stderr.
+    OPENCODE_DIR="$HOME/.opencode"
+    OPENCODE_LOG="$OPENCODE_DIR/server.log"
+    mkdir -p "$OPENCODE_DIR"
+    : > "$OPENCODE_LOG"
+    opencode web --hostname 127.0.0.1 --port 4096 >>"$OPENCODE_LOG" 2>&1 </dev/null &
+    echo $! > "$OPENCODE_DIR/server.pid"
 
     # Wait for OpenCode to be ready so the Coder app healthcheck does not flake.
     for i in $(seq 1 60); do

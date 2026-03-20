@@ -85,6 +85,21 @@ services:
       POST_DEPLOY_GITHUB_TOKEN: ${POST_DEPLOY_GITHUB_TOKEN:-}
       # Keep the host-side ./template tree synced to the exact source used for the push, including deletions.
       POST_DEPLOY_SYNC_TEMPLATE_MOUNT: "${POST_DEPLOY_SYNC_TEMPLATE_MOUNT:-1}"
+    labels:
+      # Coolify creates routers only for the primary hostname. Coder workspace apps use dynamic wildcard subdomains,
+      # so add explicit Traefik routers that forward *.${SERVICE_FQDN_CODER} to the Coder service itself.
+      traefik.enable: "true"
+      traefik.http.middlewares.coder-wildcard-redirect.redirectscheme.scheme: "https"
+      traefik.http.routers.coder-wildcard-http.entrypoints: "http"
+      traefik.http.routers.coder-wildcard-http.rule: "HostRegexp(`{subdomain:[a-z0-9-]+}.${SERVICE_FQDN_CODER}`) && PathPrefix(`/`)"
+      traefik.http.routers.coder-wildcard-http.middlewares: "coder-wildcard-redirect"
+      traefik.http.routers.coder-wildcard-http.service: "coder-wildcard"
+      traefik.http.routers.coder-wildcard-https.entrypoints: "https"
+      traefik.http.routers.coder-wildcard-https.rule: "HostRegexp(`{subdomain:[a-z0-9-]+}.${SERVICE_FQDN_CODER}`) && PathPrefix(`/`)"
+      traefik.http.routers.coder-wildcard-https.service: "coder-wildcard"
+      traefik.http.routers.coder-wildcard-https.tls: "true"
+      traefik.http.routers.coder-wildcard-https.tls.certresolver: "letsencrypt"
+      traefik.http.services.coder-wildcard.loadbalancer.server.port: "4099"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./template:/templates
@@ -95,6 +110,16 @@ services:
       - "${DOCKER_GID:-996}"
     ports:
       - "${CODER_HOST_PORT:-4099}:4099"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -fsS --max-time 3 http://127.0.0.1:4099/healthz >/dev/null || exit 1",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
     restart: unless-stopped
     networks:
       - coolify
