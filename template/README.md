@@ -28,9 +28,12 @@ These are Coder workspace parameters exposed through `data.coder_parameter` in `
 
 | Name | Default | Description |
 |------|---------|-------------|
-| `opencode_config_url` | `""` | Optional Git URL or GitHub repo/tree/blob URL provisioned into `~/workspace/.opencode` during workspace startup. |
+| `opencode_config_url` | `""` | Optional Git URL or GitHub repo/tree/blob URL provisioned into `~/.config/opencode` during workspace startup. |
 | `opencode_config_ref` | `""` | Optional branch, tag, or commit override for `opencode_config_url`. |
 | `opencode_config_subdir` | `""` | Optional path inside the fetched repo. Empty means auto-detect `.opencode` or use the repo root. |
+| `workspace_repo_urls` | `""` | Optional comma-separated Git URLs or GitHub repo/tree/blob URLs to clone into `~/workspace/<repo-name>`. Existing paths are left untouched. |
+| `linux_dotfiles_url` | `""` | Optional Git URL or GitHub repo/tree/blob URL for Linux dotfiles to clone into a managed cache under `~/.dotfiles-profile/`. |
+| `linux_dotfiles_install_command` | `""` | Optional shell command to run from the selected dotfiles directory on every startup (for example `./install.sh` or `stow bash git`). |
 
 ## Create template
 
@@ -42,13 +45,17 @@ coder templates create opencode-sandbox --directory template
 
 Set `sandbox_image` to your built image (e.g. `opencode-sandbox:latest` or `your-registry/opencode-sandbox:latest`).
 
-When users provide `opencode_config_url`, the rendered startup script fetches that repo on workspace boot, stores it under `~/.opencode-profile/releases/`, and links `~/workspace/.opencode` to the selected profile. This keeps the managed profile out of the main workspace tree while still making it visible to OpenCode as project config. If `~/workspace/.opencode` already exists outside that managed cache, the script leaves it untouched and logs a warning instead of overwriting it.
+When users provide `opencode_config_url`, the rendered startup script fetches that repo on workspace boot, stores it under `~/.opencode-profile/releases/`, and links `~/.config/opencode` to the selected profile. This keeps the managed profile in a cache while still exposing it through OpenCode's global config location. If `~/.config/opencode` already exists outside that managed cache, the script leaves it untouched and logs a warning instead of overwriting it.
+
+When users provide `workspace_repo_urls`, each repo is cloned into `~/workspace/<repo-name>`. GitHub `tree` and `blob` URLs are accepted to pin the ref, but the full repo is still cloned into the workspace root. If the target path already exists, the script leaves it unchanged so local work is not overwritten.
+
+When users provide `linux_dotfiles_url`, the selected repo or GitHub tree/blob path is cached under `~/.dotfiles-profile/`. If `linux_dotfiles_install_command` is also set, that shell command runs from the selected dotfiles directory on every startup with `DOTFILES_DIR`, `DOTFILES_REPO_DIR`, and `WORKSPACE_DIR` exported so the command can install tools or apply home-directory changes before OpenCode starts.
 
 ## Persistence
 
 - Volume name: `coder-${data.coder_workspace.me.id}-home` (immutable id only).
 - Mount: `/home/coder` (read-write). All OpenCode and user state under home persists across stop/start.
-- Managed OpenCode profile cache: `~/.opencode-profile/` persists across stop/start; `~/workspace/.opencode` can point to that managed cache, while user-level OpenCode settings still live under `~/.config/opencode`.
+- Managed OpenCode profile cache: `~/.opencode-profile/` persists across stop/start; when `opencode_config_url` is set, `~/.config/opencode` points to the selected managed profile. Repo-local `.opencode` directories remain available for project-specific overrides.
 - **First start:** Named volumes mount as **root:root** at `/home/coder`. The template sets **`user = "0:0"`** and **prepends** a bootstrap to the container **`command`** (before the agent `init_script`) so **`chown`/`mkdir`** run as **real root**; the agent then runs as **`coder`**. See **`../docs/DEBUG_WORKSPACE_VOLUME.md`** if anything still fails — use **`bootstrap.log`** / **`/tmp/coder-opencode-startup.log`**, not blind `sudo` retries.
 - Lifecycle: `ignore_changes = all` on the volume so Terraform does not recreate it.
 
