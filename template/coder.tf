@@ -6,14 +6,17 @@ resource "coder_agent" "main" {
   startup_script = local.agent_startup_script
 
   env = {
-    GIT_AUTHOR_NAME        = coalesce(data.coder_workspace_owner.me.full_name, data.coder_workspace_owner.me.name)
-    GIT_AUTHOR_EMAIL       = data.coder_workspace_owner.me.email
-    GIT_COMMITTER_NAME     = coalesce(data.coder_workspace_owner.me.full_name, data.coder_workspace_owner.me.name)
-    GIT_COMMITTER_EMAIL    = data.coder_workspace_owner.me.email
-    HOME                   = "/home/coder"
-    OPENCODE_CONFIG_REF    = data.coder_parameter.opencode_config_ref.value
-    OPENCODE_CONFIG_SUBDIR = data.coder_parameter.opencode_config_subdir.value
-    OPENCODE_CONFIG_URL    = data.coder_parameter.opencode_config_url.value
+    GIT_AUTHOR_NAME                = coalesce(data.coder_workspace_owner.me.full_name, data.coder_workspace_owner.me.name)
+    GIT_AUTHOR_EMAIL               = data.coder_workspace_owner.me.email
+    GIT_COMMITTER_NAME             = coalesce(data.coder_workspace_owner.me.full_name, data.coder_workspace_owner.me.name)
+    GIT_COMMITTER_EMAIL            = data.coder_workspace_owner.me.email
+    HOME                           = "/home/coder"
+    OPENCODE_CONFIG_URL            = data.coder_parameter.opencode_config_url.value
+    OPENCODE_CONFIG_REF            = data.coder_parameter.opencode_config_ref.value
+    OPENCODE_CONFIG_SUBDIR         = data.coder_parameter.opencode_config_subdir.value
+    WORKSPACE_REPO_URLS            = data.coder_parameter.workspace_repo_urls.value
+    LINUX_DOTFILES_URL             = data.coder_parameter.linux_dotfiles_url.value
+    LINUX_DOTFILES_INSTALL_COMMAND = data.coder_parameter.linux_dotfiles_install_command.value
   }
 
   metadata {

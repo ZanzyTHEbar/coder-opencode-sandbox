@@ -128,7 +128,7 @@ This document enumerates current gaps, desired improvements, and priority areas 
 
 ## 10. Shared config vs project config
 
-**Gap:** The current direction uses `~/workspace/.opencode` as a managed link target, which works, but it couples shared config to a single workspace root. That is not the best long-term fit for multiple projects per workspace.
+**Gap:** Shared config should live in OpenCode's global config path instead of being anchored to a single workspace root.
 
 **How to do better:**
 
@@ -139,7 +139,7 @@ This document enumerates current gaps, desired improvements, and priority areas 
 - Keep organization defaults, agents, commands, skills, and plugins outside the individual project root where practical.
 - Preserve project-level override behavior so repo-local config remains possible and natural.
 
-**Status:** Direction agreed. Current `~/workspace/.opencode` support is acceptable as an intermediate step, but should not be treated as the final architecture anchor.
+**Status:** Implemented for managed provisioning: remote OpenCode config now targets `~/.config/opencode`, while repo-local `.opencode` directories remain available for project-specific overrides.
 
 ---
 

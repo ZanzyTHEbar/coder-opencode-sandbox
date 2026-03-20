@@ -29,9 +29,9 @@ ghcr.io/zanzythebar/coder-opencode-sandbox:latest
 ## 4. Smoke test
 
 1. Log in via OIDC at your Coder URL.
-2. Create a workspace from the **OpenCode sandbox** template. If you have a custom OpenCode config repo, paste its Git URL or GitHub repo/tree/blob URL into **OpenCode config URL**. Start the workspace.
+2. Create a workspace from the **OpenCode sandbox** template. If you have a custom OpenCode config repo, paste its Git URL or GitHub repo/tree/blob URL into **OpenCode config URL**. You can also set **Workspace repo URLs** to clone repo(s) into `~/workspace`, plus **Linux dotfiles URL** and **Linux dotfiles install command** to bootstrap the Linux environment itself. Start the workspace.
 3. Open the **OpenCode** app and the **Terminal**; confirm the UI loads and you have a shell.
-4. If you set **OpenCode config URL**, confirm `~/workspace/.opencode` exists and resolves to the provisioned profile. If you already keep your own unmanaged `~/workspace/.opencode`, the startup script now leaves it untouched and logs a warning instead of replacing it.
+4. If you set **OpenCode config URL**, confirm `~/.config/opencode` exists and resolves to the provisioned profile. If you set **Workspace repo URLs**, confirm each repo appears under `~/workspace/<repo-name>`. If you set **Linux dotfiles install command**, confirm its expected side effects landed in the home directory or Linux environment. If you already keep your own unmanaged `~/.config/opencode`, the startup script now leaves it untouched and logs a warning instead of replacing it.
 5. In the terminal, create a file under `/home/coder`; stop the workspace, then start it again and confirm the file is still there.
 
 ---

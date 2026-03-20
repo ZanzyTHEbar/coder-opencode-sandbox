@@ -37,11 +37,15 @@ fi
 WORKSPACE_DIR="$HOME/workspace"
 OPENCODE_DIR="$HOME/.opencode"
 OPENCODE_LOG="$OPENCODE_DIR/server.log"
+OPENCODE_CONFIG_PARENT="$HOME/.config"
+OPENCODE_CONFIG_LINK="$OPENCODE_CONFIG_PARENT/opencode"
 PROFILE_ROOT="$HOME/.opencode-profile"
 PROFILE_RELEASES="$PROFILE_ROOT/releases"
 PROFILE_CURRENT="$PROFILE_ROOT/current"
-WORKSPACE_CONFIG_LINK="$WORKSPACE_DIR/.opencode"
-mkdir -p "$OPENCODE_DIR" "$PROFILE_RELEASES"
+DOTFILES_ROOT="$HOME/.dotfiles-profile"
+DOTFILES_RELEASES="$DOTFILES_ROOT/releases"
+DOTFILES_CURRENT="$DOTFILES_ROOT/current"
+mkdir -p "$OPENCODE_DIR" "$OPENCODE_CONFIG_PARENT" "$PROFILE_RELEASES" "$DOTFILES_RELEASES"
 : > "$OPENCODE_LOG"
 
 log_note() {
@@ -52,39 +56,54 @@ log_note_err() {
   echo "$1" | tee -a "$TMPLOG" "$OPENCODE_LOG" >&2
 }
 
-is_managed_workspace_config() {
-  [ -L "$WORKSPACE_CONFIG_LINK" ] || return 1
-  _target=$(readlink "$WORKSPACE_CONFIG_LINK" 2>/dev/null || true)
+is_managed_opencode_config() {
+  [ -L "$OPENCODE_CONFIG_LINK" ] || return 1
+  _target=$(readlink "$OPENCODE_CONFIG_LINK" 2>/dev/null || true)
   case "$_target" in
     "$PROFILE_CURRENT"|"$PROFILE_ROOT"/*) return 0 ;;
   esac
-  _target=$(readlink -f "$WORKSPACE_CONFIG_LINK" 2>/dev/null || true)
+  _target=$(readlink -f "$OPENCODE_CONFIG_LINK" 2>/dev/null || true)
   case "$_target" in
     "$PROFILE_ROOT"/*) return 0 ;;
     *) return 1 ;;
   esac
 }
 
-workspace_config_link_available() {
-  if [ -L "$WORKSPACE_CONFIG_LINK" ]; then
-    if is_managed_workspace_config; then
+opencode_config_link_available() {
+  if [ -L "$OPENCODE_CONFIG_LINK" ]; then
+    if is_managed_opencode_config; then
       return 0
     fi
-    if [ ! -e "$WORKSPACE_CONFIG_LINK" ]; then
-      log_note "WARNING: $WORKSPACE_CONFIG_LINK is a broken symlink outside the managed profile cache; leaving it unchanged"
+    if [ ! -e "$OPENCODE_CONFIG_LINK" ]; then
+      log_note "WARNING: $OPENCODE_CONFIG_LINK is a broken symlink outside the managed profile cache; leaving it unchanged"
       return 1
     fi
-    log_note "WARNING: $WORKSPACE_CONFIG_LINK already points outside the managed profile cache; leaving it unchanged"
+    log_note "WARNING: $OPENCODE_CONFIG_LINK already points outside the managed profile cache; leaving it unchanged"
     return 1
   fi
 
-  if [ -e "$WORKSPACE_CONFIG_LINK" ]; then
-    log_note "WARNING: $WORKSPACE_CONFIG_LINK already exists and is not a symlink; leaving it unchanged"
+  if [ -e "$OPENCODE_CONFIG_LINK" ]; then
+    log_note "WARNING: $OPENCODE_CONFIG_LINK already exists and is not a symlink; leaving it unchanged"
     return 1
   fi
 
   return 0
 }
+
+trim_whitespace() {
+  printf '%s\n' "$1" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//'
+}
+
+SOURCE_INPUT_URL=""
+SOURCE_INPUT_REF=""
+SOURCE_INPUT_SUBDIR=""
+SOURCE_REPO=""
+SOURCE_REF=""
+SOURCE_SUBDIR=""
+SOURCE_BROWSER_MODE=""
+SOURCE_BROWSER_TAIL=""
+SOURCE_PARSED_REF=""
+SOURCE_PARSED_SUBDIR=""
 
 strip_url_query_and_fragment() {
   printf '%s\n' "$1" | sed 's/[?#].*$//'
@@ -99,8 +118,8 @@ extract_github_path() {
 
 github_ref_exists() {
   _ref="$1"
-  GIT_TERMINAL_PROMPT=0 git ls-remote --exit-code "$OPENCODE_SOURCE_REPO" "refs/heads/$_ref" >/dev/null 2>&1 \
-    || GIT_TERMINAL_PROMPT=0 git ls-remote --exit-code "$OPENCODE_SOURCE_REPO" "refs/tags/$_ref" >/dev/null 2>&1
+  GIT_TERMINAL_PROMPT=0 git ls-remote --exit-code "$SOURCE_REPO" "refs/heads/$_ref" >/dev/null 2>&1 \
+    || GIT_TERMINAL_PROMPT=0 git ls-remote --exit-code "$SOURCE_REPO" "refs/tags/$_ref" >/dev/null 2>&1
 }
 
 looks_like_git_commit_oid() {
@@ -112,17 +131,17 @@ resolve_github_browser_ref_and_subdir() {
   _tail="$2"
   _known_ref="$3"
 
-  OPENCODE_PARSED_REF=""
-  OPENCODE_PARSED_SUBDIR=""
+  SOURCE_PARSED_REF=""
+  SOURCE_PARSED_SUBDIR=""
   [ -n "$_tail" ] || return 0
 
   if [ -n "$_known_ref" ]; then
-    OPENCODE_PARSED_REF="$_known_ref"
+    SOURCE_PARSED_REF="$_known_ref"
   else
     _candidate="$_tail"
     while [ -n "$_candidate" ]; do
       if github_ref_exists "$_candidate"; then
-        OPENCODE_PARSED_REF="$_candidate"
+        SOURCE_PARSED_REF="$_candidate"
         break
       fi
 
@@ -132,10 +151,10 @@ resolve_github_browser_ref_and_subdir() {
       esac
     done
 
-    if [ -z "$OPENCODE_PARSED_REF" ]; then
+    if [ -z "$SOURCE_PARSED_REF" ]; then
       _candidate=$${_tail%%/*}
       if looks_like_git_commit_oid "$_candidate"; then
-        OPENCODE_PARSED_REF="$_candidate"
+        SOURCE_PARSED_REF="$_candidate"
       else
         return 1
       fi
@@ -143,55 +162,55 @@ resolve_github_browser_ref_and_subdir() {
   fi
 
   case "$_tail" in
-    "$OPENCODE_PARSED_REF")
-    OPENCODE_PARSED_SUBDIR=""
+    "$SOURCE_PARSED_REF")
+    SOURCE_PARSED_SUBDIR=""
     ;;
-    "$OPENCODE_PARSED_REF"/*)
-      OPENCODE_PARSED_SUBDIR=$${_tail#"$OPENCODE_PARSED_REF"/}
+    "$SOURCE_PARSED_REF"/*)
+      SOURCE_PARSED_SUBDIR=$${_tail#"$SOURCE_PARSED_REF"/}
       ;;
     */*)
-      OPENCODE_PARSED_SUBDIR=$${_tail#*/}
+      SOURCE_PARSED_SUBDIR=$${_tail#*/}
       ;;
     *)
-      OPENCODE_PARSED_SUBDIR=""
+      SOURCE_PARSED_SUBDIR=""
       ;;
   esac
 
-  if [ "$_mode" = "blob" ] && [ -n "$OPENCODE_PARSED_SUBDIR" ]; then
-    case "$OPENCODE_PARSED_SUBDIR" in
-      */*) OPENCODE_PARSED_SUBDIR=$${OPENCODE_PARSED_SUBDIR%/*} ;;
-      *) OPENCODE_PARSED_SUBDIR="" ;;
+  if [ "$_mode" = "blob" ] && [ -n "$SOURCE_PARSED_SUBDIR" ]; then
+    case "$SOURCE_PARSED_SUBDIR" in
+      */*) SOURCE_PARSED_SUBDIR=$${SOURCE_PARSED_SUBDIR%/*} ;;
+      *) SOURCE_PARSED_SUBDIR="" ;;
     esac
   fi
 }
 
-normalize_opencode_source() {
-  OPENCODE_SOURCE_REPO=$(strip_url_query_and_fragment "$OPENCODE_CONFIG_URL")
-  OPENCODE_SOURCE_REPO=$${OPENCODE_SOURCE_REPO%/}
-  OPENCODE_SOURCE_REF=$OPENCODE_CONFIG_REF
-  OPENCODE_SOURCE_SUBDIR=$OPENCODE_CONFIG_SUBDIR
-  OPENCODE_SOURCE_BROWSER_MODE=""
-  OPENCODE_SOURCE_BROWSER_TAIL=""
+normalize_source_input() {
+  SOURCE_REPO=$(strip_url_query_and_fragment "$SOURCE_INPUT_URL")
+  SOURCE_REPO=$${SOURCE_REPO%/}
+  SOURCE_REF="$SOURCE_INPUT_REF"
+  SOURCE_SUBDIR="$SOURCE_INPUT_SUBDIR"
+  SOURCE_BROWSER_MODE=""
+  SOURCE_BROWSER_TAIL=""
 
-  _github_path=$(extract_github_path "$OPENCODE_SOURCE_REPO" 2>/dev/null || true)
+  _github_path=$(extract_github_path "$SOURCE_REPO" 2>/dev/null || true)
   if [ -n "$_github_path" ]; then
     _owner=$${_github_path%%/*}
     _repo_path=$${_github_path#*/}
     _repo=$${_repo_path%%/*}
 
     if [ -n "$_owner" ] && [ -n "$_repo" ] && [ "$_repo_path" != "$_github_path" ]; then
-      OPENCODE_SOURCE_REPO="https://github.com/$${_owner}/$${_repo%.git}.git"
+      SOURCE_REPO="https://github.com/$${_owner}/$${_repo%.git}.git"
 
       if [ "$_repo_path" != "$_repo" ]; then
         _suffix=$${_repo_path#*/}
         case "$_suffix" in
           tree/*)
-            OPENCODE_SOURCE_BROWSER_MODE="tree"
-            OPENCODE_SOURCE_BROWSER_TAIL=$${_suffix#tree/}
+            SOURCE_BROWSER_MODE="tree"
+            SOURCE_BROWSER_TAIL=$${_suffix#tree/}
             ;;
           blob/*)
-            OPENCODE_SOURCE_BROWSER_MODE="blob"
-            OPENCODE_SOURCE_BROWSER_TAIL=$${_suffix#blob/}
+            SOURCE_BROWSER_MODE="blob"
+            SOURCE_BROWSER_TAIL=$${_suffix#blob/}
             ;;
           *)
             log_note "WARNING: unsupported GitHub browser URL path; using repo root for provisioning"
@@ -200,91 +219,108 @@ normalize_opencode_source() {
       fi
     fi
   else
-    case "$OPENCODE_SOURCE_REPO" in
+    case "$SOURCE_REPO" in
       https://github.com/*)
-        case "$OPENCODE_SOURCE_REPO" in
+        case "$SOURCE_REPO" in
           *.git) ;;
-          *) OPENCODE_SOURCE_REPO="$${OPENCODE_SOURCE_REPO}.git" ;;
+          *) SOURCE_REPO="$${SOURCE_REPO}.git" ;;
         esac
         ;;
     esac
   fi
 
-  if [ -n "$OPENCODE_SOURCE_BROWSER_TAIL" ]; then
-    if ! resolve_github_browser_ref_and_subdir "$OPENCODE_SOURCE_BROWSER_MODE" "$OPENCODE_SOURCE_BROWSER_TAIL" "$OPENCODE_SOURCE_REF"; then
+  if [ -n "$SOURCE_BROWSER_TAIL" ]; then
+    if ! resolve_github_browser_ref_and_subdir "$SOURCE_BROWSER_MODE" "$SOURCE_BROWSER_TAIL" "$SOURCE_REF"; then
       log_note_err "FATAL: could not resolve a ref from the GitHub browser URL; use OpenCode config ref to disambiguate it"
       return 1
     fi
-    [ -n "$OPENCODE_SOURCE_REF" ] || OPENCODE_SOURCE_REF=$OPENCODE_PARSED_REF
-    if [ -z "$OPENCODE_SOURCE_SUBDIR" ] && [ -n "$OPENCODE_PARSED_SUBDIR" ]; then
-      OPENCODE_SOURCE_SUBDIR=$OPENCODE_PARSED_SUBDIR
+    [ -n "$SOURCE_REF" ] || SOURCE_REF=$SOURCE_PARSED_REF
+    if [ -z "$SOURCE_SUBDIR" ] && [ -n "$SOURCE_PARSED_SUBDIR" ]; then
+      SOURCE_SUBDIR=$SOURCE_PARSED_SUBDIR
     fi
   fi
 }
 
-clone_opencode_repo() {
-  if [ -n "$OPENCODE_SOURCE_REF" ]; then
-    if GIT_TERMINAL_PROMPT=0 git -c protocol.file.allow=never clone --depth 1 --branch "$OPENCODE_SOURCE_REF" --single-branch "$OPENCODE_SOURCE_REPO" "$STAGED_DIR/repo" >>"$OPENCODE_LOG" 2>&1; then
+source_repo_dir_name() {
+  _name="$SOURCE_REPO"
+  _name=$${_name##*/}
+  _name=$${_name%.git}
+  printf '%s\n' "$_name"
+}
+
+clone_source_repo_into() {
+  _dest="$1"
+
+  if [ -n "$SOURCE_REF" ]; then
+    if GIT_TERMINAL_PROMPT=0 git -c protocol.file.allow=never clone --depth 1 --branch "$SOURCE_REF" --single-branch "$SOURCE_REPO" "$_dest" >>"$OPENCODE_LOG" 2>&1; then
       return 0
     fi
-    rm -rf "$STAGED_DIR/repo"
-    GIT_TERMINAL_PROMPT=0 git -c protocol.file.allow=never clone --depth 1 "$OPENCODE_SOURCE_REPO" "$STAGED_DIR/repo" >>"$OPENCODE_LOG" 2>&1 || return 1
-    GIT_TERMINAL_PROMPT=0 git -c protocol.file.allow=never -C "$STAGED_DIR/repo" fetch --depth 1 origin "$OPENCODE_SOURCE_REF" >>"$OPENCODE_LOG" 2>&1 || return 1
-    git -C "$STAGED_DIR/repo" checkout --detach FETCH_HEAD >>"$OPENCODE_LOG" 2>&1 || return 1
+    rm -rf "$_dest"
+    GIT_TERMINAL_PROMPT=0 git -c protocol.file.allow=never clone --depth 1 "$SOURCE_REPO" "$_dest" >>"$OPENCODE_LOG" 2>&1 || return 1
+    GIT_TERMINAL_PROMPT=0 git -c protocol.file.allow=never -C "$_dest" fetch --depth 1 origin "$SOURCE_REF" >>"$OPENCODE_LOG" 2>&1 || return 1
+    git -C "$_dest" checkout --detach FETCH_HEAD >>"$OPENCODE_LOG" 2>&1 || return 1
     return 0
   fi
 
-  GIT_TERMINAL_PROMPT=0 git -c protocol.file.allow=never clone --depth 1 "$OPENCODE_SOURCE_REPO" "$STAGED_DIR/repo" >>"$OPENCODE_LOG" 2>&1
+  GIT_TERMINAL_PROMPT=0 git -c protocol.file.allow=never clone --depth 1 "$SOURCE_REPO" "$_dest" >>"$OPENCODE_LOG" 2>&1
+}
+
+resolve_selected_source_dir() {
+  _stage_dir="$1"
+  _selected_subdir="$2"
+  _fallback_dir="$3"
+
+  if [ -n "$_selected_subdir" ]; then
+    SELECTED_PATH="$_stage_dir/repo/$_selected_subdir"
+  elif [ -n "$_fallback_dir" ] && [ -d "$_stage_dir/repo/$_fallback_dir" ]; then
+    SELECTED_PATH="$_stage_dir/repo/$_fallback_dir"
+  else
+    SELECTED_PATH="$_stage_dir/repo"
+  fi
+
+  [ -d "$SELECTED_PATH" ] || return 1
+
+  SELECTED_REAL=$(readlink -f "$SELECTED_PATH" 2>/dev/null || true)
+  case "$SELECTED_REAL" in
+    "$_stage_dir"/*) ;;
+    *) return 1 ;;
+  esac
+
+  SELECTED_REL=$${SELECTED_PATH#"$_stage_dir"/}
 }
 
 ensure_opencode_profile() {
-  normalize_opencode_source || exit 1
+  SOURCE_INPUT_URL="$OPENCODE_CONFIG_URL"
+  SOURCE_INPUT_REF="$OPENCODE_CONFIG_REF"
+  SOURCE_INPUT_SUBDIR="$OPENCODE_CONFIG_SUBDIR"
+  normalize_source_input || exit 1
 
-  PROFILE_HASH=$(printf '%s\n%s\n%s\n' "$OPENCODE_SOURCE_REPO" "$OPENCODE_SOURCE_REF" "$OPENCODE_SOURCE_SUBDIR" | sha256sum | cut -d' ' -f1)
+  PROFILE_HASH=$(printf '%s\n%s\n%s\n' "$SOURCE_REPO" "$SOURCE_REF" "$SOURCE_SUBDIR" | sha256sum | cut -d' ' -f1)
   PROFILE_DIR="$PROFILE_RELEASES/$PROFILE_HASH"
 
   if [ ! -d "$PROFILE_DIR" ]; then
     STAGED_DIR=$(mktemp -d "$PROFILE_RELEASES/.staging.XXXXXX")
-    log_note "Provisioning OpenCode config from $OPENCODE_SOURCE_REPO"
+    log_note "Provisioning OpenCode config from $SOURCE_REPO"
 
-    if ! clone_opencode_repo; then
+    if ! clone_source_repo_into "$STAGED_DIR/repo"; then
       rm -rf "$STAGED_DIR"
-      log_note_err "FATAL: could not fetch OpenCode config from $OPENCODE_SOURCE_REPO"
+      log_note_err "FATAL: could not fetch OpenCode config from $SOURCE_REPO"
       exit 1
     fi
 
-    if [ -n "$OPENCODE_SOURCE_SUBDIR" ]; then
-      SELECTED_PATH="$STAGED_DIR/repo/$OPENCODE_SOURCE_SUBDIR"
-    elif [ -d "$STAGED_DIR/repo/.opencode" ]; then
-      SELECTED_PATH="$STAGED_DIR/repo/.opencode"
-    else
-      SELECTED_PATH="$STAGED_DIR/repo"
-    fi
-
-    if [ ! -d "$SELECTED_PATH" ]; then
+    if ! resolve_selected_source_dir "$STAGED_DIR" "$SOURCE_SUBDIR" ".opencode"; then
       rm -rf "$STAGED_DIR"
       log_note_err "FATAL: OpenCode config path does not exist inside the fetched repo"
       exit 1
     fi
 
-    SELECTED_REAL=$(readlink -f "$SELECTED_PATH" 2>/dev/null || true)
-    case "$SELECTED_REAL" in
-      "$STAGED_DIR"/*) ;;
-      *)
-        rm -rf "$STAGED_DIR"
-        log_note_err "FATAL: resolved OpenCode config path escaped the fetched repo"
-        exit 1
-        ;;
-    esac
-
-    SELECTED_REL=$${SELECTED_PATH#"$STAGED_DIR"/}
     ln -s "$SELECTED_REL" "$STAGED_DIR/selected"
 
     cat > "$STAGED_DIR/manifest" <<EOF
 source_url=$OPENCODE_CONFIG_URL
-source_repo=$OPENCODE_SOURCE_REPO
-source_ref=$OPENCODE_SOURCE_REF
-source_subdir=$OPENCODE_SOURCE_SUBDIR
+source_repo=$SOURCE_REPO
+source_ref=$SOURCE_REF
+source_subdir=$SOURCE_SUBDIR
 resolved_commit=$(git -C "$STAGED_DIR/repo" rev-parse HEAD 2>/dev/null || echo unknown)
 EOF
 
@@ -293,18 +329,141 @@ EOF
 
   ln -sfn "$PROFILE_DIR/selected" "$PROFILE_CURRENT"
 
-  if ! workspace_config_link_available; then
+  if ! opencode_config_link_available; then
     return 0
   fi
 
-  ln -sfn "$PROFILE_CURRENT" "$WORKSPACE_CONFIG_LINK"
+  ln -sfn "$PROFILE_CURRENT" "$OPENCODE_CONFIG_LINK"
 }
+
+ensure_workspace_repos() {
+  [ -n "$WORKSPACE_REPO_URLS" ] || return 0
+
+  set -f
+  _old_ifs=$IFS
+  IFS=','
+  set -- $WORKSPACE_REPO_URLS
+  IFS=$_old_ifs
+  set +f
+
+  for _repo_entry in "$@"; do
+    _repo_entry=$(trim_whitespace "$_repo_entry")
+    [ -n "$_repo_entry" ] || continue
+
+    SOURCE_INPUT_URL="$_repo_entry"
+    SOURCE_INPUT_REF=""
+    SOURCE_INPUT_SUBDIR=""
+    if ! normalize_source_input; then
+      log_note_err "FATAL: could not parse workspace repo URL $_repo_entry"
+      exit 1
+    fi
+
+    _target_name=$(source_repo_dir_name)
+    if [ -z "$_target_name" ]; then
+      log_note_err "FATAL: could not derive a workspace directory name from $_repo_entry"
+      exit 1
+    fi
+
+    _target_dir="$WORKSPACE_DIR/$_target_name"
+    if [ -e "$_target_dir" ] || [ -L "$_target_dir" ]; then
+      log_note "NOTE: workspace repo target $_target_dir already exists; leaving it unchanged"
+      continue
+    fi
+
+    if [ -n "$SOURCE_SUBDIR" ]; then
+      log_note "NOTE: ignoring GitHub subdirectory component for workspace repo $_repo_entry; cloning the full repo into $_target_dir"
+    fi
+
+    log_note "Cloning workspace repo $SOURCE_REPO into $_target_dir"
+    if ! clone_source_repo_into "$_target_dir"; then
+      log_note_err "FATAL: could not clone workspace repo from $SOURCE_REPO"
+      exit 1
+    fi
+  done
+}
+
+ensure_linux_dotfiles() {
+  SOURCE_INPUT_URL="$LINUX_DOTFILES_URL"
+  SOURCE_INPUT_REF=""
+  SOURCE_INPUT_SUBDIR=""
+  normalize_source_input || exit 1
+
+  DOTFILES_HASH=$(printf '%s\n%s\n%s\n' "$SOURCE_REPO" "$SOURCE_REF" "$SOURCE_SUBDIR" | sha256sum | cut -d' ' -f1)
+  _profile_dir="$DOTFILES_RELEASES/$DOTFILES_HASH"
+
+  if [ ! -d "$_profile_dir" ]; then
+    STAGED_DIR=$(mktemp -d "$DOTFILES_RELEASES/.staging.XXXXXX")
+    log_note "Provisioning Linux dotfiles from $SOURCE_REPO"
+
+    if ! clone_source_repo_into "$STAGED_DIR/repo"; then
+      rm -rf "$STAGED_DIR"
+      log_note_err "FATAL: could not fetch Linux dotfiles from $SOURCE_REPO"
+      exit 1
+    fi
+
+    if ! resolve_selected_source_dir "$STAGED_DIR" "$SOURCE_SUBDIR" ""; then
+      rm -rf "$STAGED_DIR"
+      log_note_err "FATAL: Linux dotfiles path does not exist inside the fetched repo"
+      exit 1
+    fi
+
+    ln -s "$SELECTED_REL" "$STAGED_DIR/selected"
+
+    cat > "$STAGED_DIR/manifest" <<EOF
+source_url=$LINUX_DOTFILES_URL
+source_repo=$SOURCE_REPO
+source_ref=$SOURCE_REF
+source_subdir=$SOURCE_SUBDIR
+resolved_commit=$(git -C "$STAGED_DIR/repo" rev-parse HEAD 2>/dev/null || echo unknown)
+EOF
+
+    mv "$STAGED_DIR" "$_profile_dir"
+  fi
+
+  ln -sfn "$_profile_dir/selected" "$DOTFILES_CURRENT"
+
+  if [ -z "$LINUX_DOTFILES_INSTALL_COMMAND" ]; then
+    log_note "NOTE: Linux dotfiles URL is set but no install command was provided; skipping apply step"
+    return 0
+  fi
+
+  _selected_dir=$(readlink -f "$DOTFILES_CURRENT" 2>/dev/null || true)
+  _repo_dir=$(readlink -f "$_profile_dir/repo" 2>/dev/null || true)
+  [ -n "$_repo_dir" ] || _repo_dir="$_selected_dir"
+
+  if [ -z "$_selected_dir" ] || [ ! -d "$_selected_dir" ]; then
+    log_note_err "FATAL: Linux dotfiles path is not available for apply"
+    exit 1
+  fi
+
+  log_note "Applying Linux dotfiles from $_selected_dir"
+  if ! (
+    export DOTFILES_DIR="$_selected_dir"
+    export DOTFILES_REPO_DIR="$_repo_dir"
+    export WORKSPACE_DIR
+    cd "$_selected_dir" || exit 1
+    sh -lc "$LINUX_DOTFILES_INSTALL_COMMAND"
+  ) >>"$TMPLOG" 2>&1; then
+    log_note_err "FATAL: Linux dotfiles install command failed"
+    exit 1
+  fi
+
+  log_note "Linux dotfiles install command completed successfully"
+}
+
+ensure_workspace_repos
 
 if [ -n "$OPENCODE_CONFIG_URL" ]; then
   ensure_opencode_profile
-elif is_managed_workspace_config; then
-  log_note "Removing managed workspace .opencode link because no config URL is set"
-  rm -f "$WORKSPACE_CONFIG_LINK"
+elif is_managed_opencode_config; then
+  log_note "Removing managed OpenCode config link because no config URL is set"
+  rm -f "$OPENCODE_CONFIG_LINK"
+fi
+
+if [ -n "$LINUX_DOTFILES_URL" ]; then
+  ensure_linux_dotfiles
+elif [ -n "$LINUX_DOTFILES_INSTALL_COMMAND" ]; then
+  log_note "WARNING: Linux dotfiles install command is set but Linux dotfiles URL is empty; skipping apply step"
 fi
 
 # Start OpenCode from the user's workspace, not filesystem root.
