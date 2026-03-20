@@ -87,15 +87,17 @@ services:
       POST_DEPLOY_SYNC_TEMPLATE_MOUNT: "${POST_DEPLOY_SYNC_TEMPLATE_MOUNT:-1}"
     labels:
       # Coolify creates routers only for the primary hostname. Coder workspace apps use dynamic wildcard subdomains,
-      # so add explicit Traefik routers that forward *.${SERVICE_FQDN_CODER} to the Coder service itself.
+      # so add explicit Traefik routers that forward workspace subdomains to the Coder service itself.
+      # Traefik v3 expects pure regex syntax here; `[a-z0-9-]+` allows names like:
+      # `opencode--orange-owl-37--zanzythebar`.
       traefik.enable: "true"
       traefik.http.middlewares.coder-wildcard-redirect.redirectscheme.scheme: "https"
       traefik.http.routers.coder-wildcard-http.entrypoints: "http"
-      traefik.http.routers.coder-wildcard-http.rule: "HostRegexp(`{subdomain:[a-z0-9-]+}.${SERVICE_FQDN_CODER}`) && PathPrefix(`/`)"
+      traefik.http.routers.coder-wildcard-http.rule: "HostRegexp(`[a-z0-9-]+\\.${SERVICE_FQDN_CODER}`) && PathPrefix(`/`)"
       traefik.http.routers.coder-wildcard-http.middlewares: "coder-wildcard-redirect"
       traefik.http.routers.coder-wildcard-http.service: "coder-wildcard"
       traefik.http.routers.coder-wildcard-https.entrypoints: "https"
-      traefik.http.routers.coder-wildcard-https.rule: "HostRegexp(`{subdomain:[a-z0-9-]+}.${SERVICE_FQDN_CODER}`) && PathPrefix(`/`)"
+      traefik.http.routers.coder-wildcard-https.rule: "HostRegexp(`[a-z0-9-]+\\.${SERVICE_FQDN_CODER}`) && PathPrefix(`/`)"
       traefik.http.routers.coder-wildcard-https.service: "coder-wildcard"
       traefik.http.routers.coder-wildcard-https.tls: "true"
       traefik.http.routers.coder-wildcard-https.tls.certresolver: "letsencrypt"
