@@ -5,7 +5,7 @@ data "coder_workspace_owner" "me" {}
 data "coder_parameter" "opencode_config_url" {
   name         = "opencode_config_url"
   display_name = "OpenCode config URL"
-  description  = "Optional Git or GitHub URL to provision as ~/workspace/.opencode. Supports repo URLs and GitHub tree URLs."
+  description  = "Optional Git URL or GitHub repo/tree/blob URL to provision as ~/workspace/.opencode."
   type         = "string"
   default      = ""
   mutable      = true

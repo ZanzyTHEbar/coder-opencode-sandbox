@@ -29,11 +29,11 @@ ghcr.io/zanzythebar/coder-opencode-sandbox:latest
 ## 4. Smoke test
 
 1. Log in via OIDC at your Coder URL.
-2. Create a workspace from the **OpenCode sandbox** template. If you have a custom OpenCode config repo, paste its Git or GitHub URL into **OpenCode config URL**. Start the workspace.
+2. Create a workspace from the **OpenCode sandbox** template. If you have a custom OpenCode config repo, paste its Git URL or GitHub repo/tree/blob URL into **OpenCode config URL**. Start the workspace.
 3. Open the **OpenCode** app and the **Terminal**; confirm the UI loads and you have a shell.
-4. If you set **OpenCode config URL**, confirm `~/workspace/.opencode` exists and resolves to the provisioned profile.
+4. If you set **OpenCode config URL**, confirm `~/workspace/.opencode` exists and resolves to the provisioned profile. If you already keep your own unmanaged `~/workspace/.opencode`, the startup script now leaves it untouched and logs a warning instead of replacing it.
 5. In the terminal, create a file under `/home/coder`; stop the workspace, then start it again and confirm the file is still there.
 
 ---
 
-See [docs/OPERATOR.md](docs/OPERATOR.md) for full operator guidance and [docs/USER.md](docs/USER.md) for end-user instructions. For backup, wildcard URLs, versioning, and other future work, see [docs/IMPROVEMENTS.md](docs/IMPROVEMENTS.md) and [docs/SAVE_STATE_AND_BACKLOG.md](docs/SAVE_STATE_AND_BACKLOG.md).
+See [docs/OPERATOR.md](docs/OPERATOR.md) for full operator guidance and [docs/USER.md](docs/USER.md) for end-user instructions. For backup, wildcard URLs, versioning, and other future work, see [docs/BACKUP.md](docs/BACKUP.md), [docs/WILDCARD_APP_URLS.md](docs/WILDCARD_APP_URLS.md), [docs/OPERATOR.md#9-template-versioning-and-upgrades](docs/OPERATOR.md#9-template-versioning-and-upgrades), and [docs/IMPROVEMENTS.md](docs/IMPROVEMENTS.md).

@@ -24,7 +24,7 @@ fi
 
 # Keep workspace creation idempotent even if `.init_done` already exists.
 if ! mkdir -p "$HOME/workspace" 2>>"$TMPLOG"; then
-  echo "FATAL: mkdir -p $HOME/workspace failed — read $TMPLOG and docs/DEBUG_WORKSPACE_VOLUME.md" | tee -a "$TMPLOG" >&2
+  echo "FATAL: mkdir -p $HOME/workspace failed — read $TMPLOG and the DEBUG_WORKSPACE_VOLUME.md guide in this repo" | tee -a "$TMPLOG" >&2
   exit 1
 fi
 
@@ -54,6 +54,10 @@ log_note_err() {
 
 is_managed_workspace_config() {
   [ -L "$WORKSPACE_CONFIG_LINK" ] || return 1
+  _target=$(readlink "$WORKSPACE_CONFIG_LINK" 2>/dev/null || true)
+  case "$_target" in
+    "$PROFILE_CURRENT"|"$PROFILE_ROOT"/*) return 0 ;;
+  esac
   _target=$(readlink -f "$WORKSPACE_CONFIG_LINK" 2>/dev/null || true)
   case "$_target" in
     "$PROFILE_ROOT"/*) return 0 ;;
@@ -61,38 +65,161 @@ is_managed_workspace_config() {
   esac
 }
 
-normalize_opencode_source() {
-  OPENCODE_SOURCE_REPO=$${OPENCODE_CONFIG_URL%/}
-  OPENCODE_SOURCE_REF=$OPENCODE_CONFIG_REF
-  OPENCODE_SOURCE_SUBDIR=$OPENCODE_CONFIG_SUBDIR
+workspace_config_link_available() {
+  if [ -L "$WORKSPACE_CONFIG_LINK" ]; then
+    if is_managed_workspace_config; then
+      return 0
+    fi
+    if [ ! -e "$WORKSPACE_CONFIG_LINK" ]; then
+      log_note "WARNING: $WORKSPACE_CONFIG_LINK is a broken symlink outside the managed profile cache; leaving it unchanged"
+      return 1
+    fi
+    log_note "WARNING: $WORKSPACE_CONFIG_LINK already points outside the managed profile cache; leaving it unchanged"
+    return 1
+  fi
 
-  case "$OPENCODE_SOURCE_REPO" in
-    https://github.com/*/tree/*)
-      _rest=$${OPENCODE_SOURCE_REPO#https://github.com/}
-      _owner=$${_rest%%/*}
-      _rest=$${_rest#*/}
-      _repo=$${_rest%%/*}
-      _rest=$${_rest#*/}
-      _rest=$${_rest#tree/}
-      _parsed_ref=$${_rest%%/*}
-      if [ "$_rest" = "$_parsed_ref" ]; then
-        _parsed_subdir=""
-      else
-        _parsed_subdir=$${_rest#*/}
+  if [ -e "$WORKSPACE_CONFIG_LINK" ]; then
+    log_note "WARNING: $WORKSPACE_CONFIG_LINK already exists and is not a symlink; leaving it unchanged"
+    return 1
+  fi
+
+  return 0
+}
+
+strip_url_query_and_fragment() {
+  printf '%s\n' "$1" | sed 's/[?#].*$//'
+}
+
+extract_github_path() {
+  _trimmed=$(strip_url_query_and_fragment "$1")
+  _path=$(printf '%s\n' "$_trimmed" | sed 's#^[Hh][Tt][Tt][Pp]\([Ss]\)\{0,1\}://\([Ww][Ww][Ww]\.\)\{0,1\}[Gg][Ii][Tt][Hh][Uu][Bb]\.[Cc][Oo][Mm]/##')
+  [ "$_path" = "$_trimmed" ] && return 1
+  printf '%s\n' "$_path"
+}
+
+github_ref_exists() {
+  _ref="$1"
+  GIT_TERMINAL_PROMPT=0 git ls-remote --exit-code "$OPENCODE_SOURCE_REPO" "refs/heads/$_ref" >/dev/null 2>&1 \
+    || GIT_TERMINAL_PROMPT=0 git ls-remote --exit-code "$OPENCODE_SOURCE_REPO" "refs/tags/$_ref" >/dev/null 2>&1
+}
+
+looks_like_git_commit_oid() {
+  printf '%s\n' "$1" | grep -Eq '^[0-9A-Fa-f]{7,40}$'
+}
+
+resolve_github_browser_ref_and_subdir() {
+  _mode="$1"
+  _tail="$2"
+  _known_ref="$3"
+
+  OPENCODE_PARSED_REF=""
+  OPENCODE_PARSED_SUBDIR=""
+  [ -n "$_tail" ] || return 0
+
+  if [ -n "$_known_ref" ]; then
+    OPENCODE_PARSED_REF="$_known_ref"
+  else
+    _candidate="$_tail"
+    while [ -n "$_candidate" ]; do
+      if github_ref_exists "$_candidate"; then
+        OPENCODE_PARSED_REF="$_candidate"
+        break
       fi
-      OPENCODE_SOURCE_REPO="https://github.com/$${_owner}/$${_repo}.git"
-      [ -n "$OPENCODE_SOURCE_REF" ] || OPENCODE_SOURCE_REF=$_parsed_ref
-      if [ -z "$OPENCODE_SOURCE_SUBDIR" ] && [ -n "$_parsed_subdir" ]; then
-        OPENCODE_SOURCE_SUBDIR=$_parsed_subdir
-      fi
-      ;;
-    https://github.com/*)
-      case "$OPENCODE_SOURCE_REPO" in
-        *.git) ;;
-        *) OPENCODE_SOURCE_REPO="$${OPENCODE_SOURCE_REPO}.git" ;;
+
+      case "$_candidate" in
+        */*) _candidate=$${_candidate%/*} ;;
+        *) break ;;
       esac
+    done
+
+    if [ -z "$OPENCODE_PARSED_REF" ]; then
+      _candidate=$${_tail%%/*}
+      if looks_like_git_commit_oid "$_candidate"; then
+        OPENCODE_PARSED_REF="$_candidate"
+      else
+        return 1
+      fi
+    fi
+  fi
+
+  case "$_tail" in
+    "$OPENCODE_PARSED_REF")
+    OPENCODE_PARSED_SUBDIR=""
+    ;;
+    "$OPENCODE_PARSED_REF"/*)
+      OPENCODE_PARSED_SUBDIR=$${_tail#"$OPENCODE_PARSED_REF"/}
+      ;;
+    */*)
+      OPENCODE_PARSED_SUBDIR=$${_tail#*/}
+      ;;
+    *)
+      OPENCODE_PARSED_SUBDIR=""
       ;;
   esac
+
+  if [ "$_mode" = "blob" ] && [ -n "$OPENCODE_PARSED_SUBDIR" ]; then
+    case "$OPENCODE_PARSED_SUBDIR" in
+      */*) OPENCODE_PARSED_SUBDIR=$${OPENCODE_PARSED_SUBDIR%/*} ;;
+      *) OPENCODE_PARSED_SUBDIR="" ;;
+    esac
+  fi
+}
+
+normalize_opencode_source() {
+  OPENCODE_SOURCE_REPO=$(strip_url_query_and_fragment "$OPENCODE_CONFIG_URL")
+  OPENCODE_SOURCE_REPO=$${OPENCODE_SOURCE_REPO%/}
+  OPENCODE_SOURCE_REF=$OPENCODE_CONFIG_REF
+  OPENCODE_SOURCE_SUBDIR=$OPENCODE_CONFIG_SUBDIR
+  OPENCODE_SOURCE_BROWSER_MODE=""
+  OPENCODE_SOURCE_BROWSER_TAIL=""
+
+  _github_path=$(extract_github_path "$OPENCODE_SOURCE_REPO" 2>/dev/null || true)
+  if [ -n "$_github_path" ]; then
+    _owner=$${_github_path%%/*}
+    _repo_path=$${_github_path#*/}
+    _repo=$${_repo_path%%/*}
+
+    if [ -n "$_owner" ] && [ -n "$_repo" ] && [ "$_repo_path" != "$_github_path" ]; then
+      OPENCODE_SOURCE_REPO="https://github.com/$${_owner}/$${_repo%.git}.git"
+
+      if [ "$_repo_path" != "$_repo" ]; then
+        _suffix=$${_repo_path#*/}
+        case "$_suffix" in
+          tree/*)
+            OPENCODE_SOURCE_BROWSER_MODE="tree"
+            OPENCODE_SOURCE_BROWSER_TAIL=$${_suffix#tree/}
+            ;;
+          blob/*)
+            OPENCODE_SOURCE_BROWSER_MODE="blob"
+            OPENCODE_SOURCE_BROWSER_TAIL=$${_suffix#blob/}
+            ;;
+          *)
+            log_note "WARNING: unsupported GitHub browser URL path; using repo root for provisioning"
+            ;;
+        esac
+      fi
+    fi
+  else
+    case "$OPENCODE_SOURCE_REPO" in
+      https://github.com/*)
+        case "$OPENCODE_SOURCE_REPO" in
+          *.git) ;;
+          *) OPENCODE_SOURCE_REPO="$${OPENCODE_SOURCE_REPO}.git" ;;
+        esac
+        ;;
+    esac
+  fi
+
+  if [ -n "$OPENCODE_SOURCE_BROWSER_TAIL" ]; then
+    if ! resolve_github_browser_ref_and_subdir "$OPENCODE_SOURCE_BROWSER_MODE" "$OPENCODE_SOURCE_BROWSER_TAIL" "$OPENCODE_SOURCE_REF"; then
+      log_note_err "FATAL: could not resolve a ref from the GitHub browser URL; use OpenCode config ref to disambiguate it"
+      return 1
+    fi
+    [ -n "$OPENCODE_SOURCE_REF" ] || OPENCODE_SOURCE_REF=$OPENCODE_PARSED_REF
+    if [ -z "$OPENCODE_SOURCE_SUBDIR" ] && [ -n "$OPENCODE_PARSED_SUBDIR" ]; then
+      OPENCODE_SOURCE_SUBDIR=$OPENCODE_PARSED_SUBDIR
+    fi
+  fi
 }
 
 clone_opencode_repo() {
@@ -111,7 +238,7 @@ clone_opencode_repo() {
 }
 
 ensure_opencode_profile() {
-  normalize_opencode_source
+  normalize_opencode_source || exit 1
 
   PROFILE_HASH=$(printf '%s\n%s\n%s\n' "$OPENCODE_SOURCE_REPO" "$OPENCODE_SOURCE_REF" "$OPENCODE_SOURCE_SUBDIR" | sha256sum | cut -d' ' -f1)
   PROFILE_DIR="$PROFILE_RELEASES/$PROFILE_HASH"
@@ -166,8 +293,7 @@ EOF
 
   ln -sfn "$PROFILE_DIR/selected" "$PROFILE_CURRENT"
 
-  if [ -e "$WORKSPACE_CONFIG_LINK" ] && [ ! -L "$WORKSPACE_CONFIG_LINK" ]; then
-    log_note "WARNING: $WORKSPACE_CONFIG_LINK already exists and is not a symlink; leaving it unchanged"
+  if ! workspace_config_link_available; then
     return 0
   fi
 

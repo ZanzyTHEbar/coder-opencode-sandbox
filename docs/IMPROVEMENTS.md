@@ -33,15 +33,15 @@ This document enumerates current gaps, desired improvements, and priority areas 
 
 ## 3. Template versioning and upgrades
 
-**Gap:** No clear template version; operators may lose track of the current revision or preferred upgrade mechanisms.
+**Gap:** Template versioning exists, but release discipline is still mostly manual. Operators can read the current version, yet tags and upgrade expectations are not fully standardized.
 
 **How to do better:**
 
-- **Repo versioning:** Use git tags (e.g., `v1.0.0`) and/or a `VERSION` file; document the version in the template README or as a template variable.
+- **Repo versioning:** Keep the root `VERSION` file current, use git tags (e.g., `v1.0.0`) for operator-facing releases, and document the version in the template README or release notes.
 - **Pin at create:** When running `coder templates create`, use a specific git commit or tag (clone/check out at `vX.Y.Z`), or use a tagged archive.
 - **Upgrade path:** Document pulling the latest (or pinned) revision, re-running `coder templates push` (or creating a new template version), and workflows for updating workspaces to the new version. See [OPERATOR.md](OPERATOR.md#9-template-versioning-and-upgrades).
 
-**Status:** OPERATOR.md covers template versioning/upgrades; consider adding a `VERSION` file and tagging releases.
+**Status:** The repo already tracks template version in the root `VERSION` file, and OPERATOR.md covers upgrades. Release tags and bump discipline are still a follow-up.
 
 ---
 
@@ -122,7 +122,7 @@ This document enumerates current gaps, desired improvements, and priority areas 
   - `~/workspace/shared` for non-repo material
 - Document that users can work with multiple repos and parent directories in the same OpenCode server.
 
-**Status:** Decision made. This should become the primary architecture documented in README, USER, OPERATOR, SAVE_STATE_AND_BACKLOG, and future template changes.
+**Status:** Decision made. This should become the primary architecture documented in README, USER, OPERATOR, and future template changes.
 
 ---
 
