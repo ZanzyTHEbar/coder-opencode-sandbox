@@ -3,9 +3,10 @@
 # Runs inside the Coder container when Coolify runs the post-deployment command.
 #
 # Template source (POST_DEPLOY_TEMPLATE_SOURCE):
-#   deployed_commit (default) — Fetch the exact Git commit being deployed via Coolify's SOURCE_COMMIT env.
-#                               Guarantees template == deployed stack revision on every redeploy.
-#   auto                      — Prefer the verified bind mount; if stale, fall back to deployed_commit (or GitHub ref).
+#   deployed_commit (default) — Fetch the exact Git commit being deployed via Coolify's SOURCE_COMMIT env,
+#                               sync it back into ./template, then push that exact tree.
+#   auto                      — Use the bind mount only when it is verified AND already stamped with SOURCE_COMMIT;
+#                               otherwise fetch exact deployed commit (or GitHub ref), sync it back, then push.
 #   mount                     — Only the bind mount; fail if stale (strict).
 #   github_ref                — Fetch POST_DEPLOY_GITHUB_REF / POST_DEPLOY_GITHUB_REF_TYPE; ignores mount.
 #
@@ -24,6 +25,8 @@ POST_DEPLOY_TEMPLATE_SOURCE="${POST_DEPLOY_TEMPLATE_SOURCE:-deployed_commit}"
 POST_DEPLOY_GITHUB_REPO="${POST_DEPLOY_GITHUB_REPO:-ZanzyTHEbar/coder-opencode-sandbox}"
 POST_DEPLOY_GITHUB_REF="${POST_DEPLOY_GITHUB_REF:-}"
 POST_DEPLOY_GITHUB_REF_TYPE="${POST_DEPLOY_GITHUB_REF_TYPE:-heads}"
+POST_DEPLOY_SYNC_TEMPLATE_MOUNT="${POST_DEPLOY_SYNC_TEMPLATE_MOUNT:-1}"
+TEMPLATE_SOURCE_STAMP_FILE=".coolify-source-commit"
 
 # Set after resolve; may point at fetched tree under /tmp
 TEMPLATE_DIR=""
@@ -37,7 +40,51 @@ template_verify_ok() {
   _dir="$1"
   _tf="$_dir/main.tf"
   [ -r "$_tf" ] && grep -q 'workspace_volume_bootstrap' "$_tf" 2>/dev/null \
-    && grep -q 'user = "0:0"' "$_tf" 2>/dev/null
+    && grep -q 'user = "0:0"' "$_tf" 2>/dev/null \
+    && [ ! -e "$_dir/variables.tf" ]
+}
+
+template_mount_matches_source_commit() {
+  _dir="$1"
+  [ -n "${SOURCE_COMMIT:-}" ] \
+    && [ -r "$_dir/$TEMPLATE_SOURCE_STAMP_FILE" ] \
+    && [ "$(tr -d '\r\n' < "$_dir/$TEMPLATE_SOURCE_STAMP_FILE" 2>/dev/null)" = "$SOURCE_COMMIT" ]
+}
+
+sync_template_to_mount() {
+  _src="$1"
+  _dst="$MOUNT_TEMPLATE_DIR"
+
+  if [ "${POST_DEPLOY_SYNC_TEMPLATE_MOUNT}" != "1" ]; then
+    echo "post-deploy: mount sync disabled; leaving bind-mounted template untouched" >&2
+    return 0
+  fi
+
+  if [ "$_src" = "$_dst" ]; then
+    if [ -n "${SOURCE_COMMIT:-}" ]; then
+      printf '%s\n' "$SOURCE_COMMIT" > "$_dst/$TEMPLATE_SOURCE_STAMP_FILE"
+    fi
+    return 0
+  fi
+
+  mkdir -p "$_dst"
+  if [ ! -w "$_dst" ]; then
+    echo "post-deploy: FATAL: $_dst is not writable; cannot sync exact deployed template back to disk." >&2
+    ls -ld "$_dst" >&2 || true
+    exit 1
+  fi
+
+  echo "post-deploy: syncing exact template tree from $_src to $_dst (deleting stale files first)" >&2
+  find "$_dst" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+  cp -a "$_src"/. "$_dst"/
+
+  if [ -n "${SOURCE_COMMIT:-}" ]; then
+    printf '%s\n' "$SOURCE_COMMIT" > "$_dst/$TEMPLATE_SOURCE_STAMP_FILE"
+  else
+    rm -f "$_dst/$TEMPLATE_SOURCE_STAMP_FILE"
+  fi
+
+  TEMPLATE_DIR="$_dst"
 }
 
 fetch_template_archive() {
@@ -123,7 +170,12 @@ resolve_template_dir() {
     auto|*)
       TEMPLATE_DIR="$MOUNT_TEMPLATE_DIR"
       if template_verify_ok "$TEMPLATE_DIR"; then
-        echo "post-deploy: bind-mounted template verified OK at $TEMPLATE_DIR" >&2
+        if template_mount_matches_source_commit "$TEMPLATE_DIR"; then
+          echo "post-deploy: bind-mounted template verified OK and matches SOURCE_COMMIT at $TEMPLATE_DIR" >&2
+        else
+          echo "post-deploy: bind mount passed sanity checks but is not stamped for SOURCE_COMMIT=${SOURCE_COMMIT}; fetching exact deployed commit..." >&2
+          fetch_template_from_source_commit
+        fi
       else
         if [ -n "${SOURCE_COMMIT:-}" ]; then
           echo "post-deploy: bind mount missing or stale; fetching exact deployed commit SOURCE_COMMIT=${SOURCE_COMMIT}..." >&2
@@ -148,6 +200,10 @@ if ! command -v coder >/dev/null 2>&1; then
 fi
 
 resolve_template_dir
+
+if [ "$TEMPLATE_DIR" != "$MOUNT_TEMPLATE_DIR" ]; then
+  sync_template_to_mount "$TEMPLATE_DIR"
+fi
 
 export CODER_SESSION_TOKEN="${CODER_TOKEN}"
 

@@ -15,21 +15,23 @@ Coolify already injects **`SOURCE_COMMIT`** into the container environment.
 
 1. Read **`SOURCE_COMMIT`** from the running Coder container.
 2. Download **that exact commit archive** from GitHub.
-3. Run **`coder templates push`** from that extracted `template/` tree.
+3. Sync that exact `template/` tree back into the bind-mounted `./template` directory, deleting stale files first.
+4. Run **`coder templates push`** from the synced tree.
 
 That gives you a hard guarantee:
 
 - **Every redeploy** pushes the template.
 - The template is **always in sync** with the **deployed stack revision**.
-- Coolify’s **“preserve repo during deployment”** cannot leave you on stale Terraform.
+- Coolify’s **“preserve repo during deployment”** cannot leave deleted files behind in `./template`.
 
 ## `auto`
 
 `POST_DEPLOY_TEMPLATE_SOURCE=auto` is a softer mode:
 
-1. Use the bind-mounted `./template` → `/templates` **if** it passes sanity checks.
-2. If it does not, fetch the **exact `SOURCE_COMMIT`** when available.
-3. If `SOURCE_COMMIT` is unavailable, fall back to the configured GitHub ref.
+1. Use the bind-mounted `./template` → `/templates` only if it passes sanity checks **and** is already stamped with the current `SOURCE_COMMIT`.
+2. Otherwise, fetch the **exact `SOURCE_COMMIT`** when available.
+3. Sync that exact tree back into `./template`, deleting stale files first.
+4. If `SOURCE_COMMIT` is unavailable, fall back to the configured GitHub ref.
 
 Use this if you want to prefer the local checkout for speed, but still recover safely.
 
@@ -58,6 +60,7 @@ This is strict and only safe if you can **prove** Coolify refreshes the checkout
 | `POST_DEPLOY_GITHUB_REF` | Branch or tag name (used by `github_ref`, fallback for `auto`) |
 | `POST_DEPLOY_GITHUB_REF_TYPE` | `heads` or `tags` |
 | `POST_DEPLOY_GITHUB_TOKEN` | Optional Bearer PAT for private repos |
+| `POST_DEPLOY_SYNC_TEMPLATE_MOUNT` | `1` (default) keeps `./template` synced to the pushed source tree, including deletions |
 
 See [COOLIFY_E2E.md](COOLIFY_E2E.md) for Coolify + `CODER_TOKEN` + post-deploy command.
 
