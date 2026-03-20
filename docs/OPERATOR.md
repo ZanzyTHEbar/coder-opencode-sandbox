@@ -51,7 +51,7 @@ Set this as the template variable **sandbox_image**. After the first workflow ru
 
 ## 5. Create/update the template in Coder
 
-- **Coolify (recommended):** Set **Post-deployment command** to `sh /deploy/post-deploy.sh` and **CODER_TOKEN**. Default **`POST_DEPLOY_TEMPLATE_SOURCE=auto`** uses the bind-mounted `template/` when valid, otherwise fetches from GitHub — **no** GitHub Actions required. See [COOLIFY_E2E.md](COOLIFY_E2E.md) and [TEMPLATE_REGISTRATION.md](TEMPLATE_REGISTRATION.md).
+- **Coolify (recommended):** Set **Post-deployment command** to `sh /deploy/post-deploy.sh` and **CODER_TOKEN**. Default **`POST_DEPLOY_TEMPLATE_SOURCE=deployed_commit`** fetches the exact **`SOURCE_COMMIT`** from GitHub on every redeploy — **no** GitHub Actions required. See [COOLIFY_E2E.md](COOLIFY_E2E.md) and [TEMPLATE_REGISTRATION.md](TEMPLATE_REGISTRATION.md).
 - **Manual:** Run `CODER_URL=https://coder.example.com CODER_TOKEN=<token> ./scripts/bootstrap-template.sh` from the repo root. Override image with `SANDBOX_IMAGE=... ./scripts/bootstrap-template.sh` if needed.
 
 ## 6. Persistence and lifecycle

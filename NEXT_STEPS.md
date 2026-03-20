@@ -22,7 +22,7 @@ No local build needed. After the first workflow run, set the package to **Public
 
 ## 3. Register the template
 
-**Option A — Coolify post-deploy (recommended):** Set **Post-deployment command** to `sh /deploy/post-deploy.sh` and **CODER_TOKEN** in Coolify env. Default **`POST_DEPLOY_TEMPLATE_SOURCE=auto`** (see [docs/TEMPLATE_REGISTRATION.md](docs/TEMPLATE_REGISTRATION.md)) fetches from GitHub if the bind-mounted `template/` is stale — **no** GitHub Actions required. See [docs/COOLIFY_E2E.md](docs/COOLIFY_E2E.md).
+**Option A — Coolify post-deploy (recommended):** Set **Post-deployment command** to `sh /deploy/post-deploy.sh` and **CODER_TOKEN** in Coolify env. Default **`POST_DEPLOY_TEMPLATE_SOURCE=deployed_commit`** (see [docs/TEMPLATE_REGISTRATION.md](docs/TEMPLATE_REGISTRATION.md)) fetches the exact deployed **`SOURCE_COMMIT`** from GitHub — **no** GitHub Actions required. See [docs/COOLIFY_E2E.md](docs/COOLIFY_E2E.md).
 
 **Option B — Manual:** `CODER_URL=https://coder.example.com CODER_TOKEN=<token> ./scripts/bootstrap-template.sh`
 

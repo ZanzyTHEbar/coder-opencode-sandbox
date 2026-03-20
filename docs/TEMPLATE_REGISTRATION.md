@@ -2,32 +2,60 @@
 
 Template registration uses **`coder templates push`** — either from **Coolify post-deploy** ([`coder-deployment/post-deploy.sh`](../coder-deployment/post-deploy.sh)) or **manually** ([`scripts/bootstrap-template.sh`](../scripts/bootstrap-template.sh)).
 
-If you **do not** use a CI pipeline to push templates (or cannot), use **`POST_DEPLOY_TEMPLATE_SOURCE`** so the **template never comes from a stale Coolify checkout** when “preserve repo during deployment” leaves old files on disk.
+The critical requirement is:
 
-## Recommended: `auto` (default)
+- The template in Coder must match the **exact git revision** that Coolify just deployed.
+- A preserved or stale bind-mounted checkout must **never** win over that deployed revision.
 
-`POST_DEPLOY_TEMPLATE_SOURCE=auto` (set in [`docker-compose.yml`](../docker-compose.yml) or Coolify env):
+## Recommended: `deployed_commit` (default)
 
-1. **Use** the bind-mounted `./template` → `/templates` **if** it passes sanity checks (`workspace_volume_bootstrap` + `user = "0:0"` in `main.tf`).
-2. **Otherwise** download the same tree from **GitHub** (`POST_DEPLOY_GITHUB_*`) and push from `/tmp`.
+Coolify already injects **`SOURCE_COMMIT`** into the container environment.
 
-So every deploy **either** uses a **good** local checkout **or** self-heals from **`main`** — **no** separate CI required.
+`POST_DEPLOY_TEMPLATE_SOURCE=deployed_commit` makes post-deploy:
 
-## Stricter: always fetch from GitHub
+1. Read **`SOURCE_COMMIT`** from the running Coder container.
+2. Download **that exact commit archive** from GitHub.
+3. Run **`coder templates push`** from that extracted `template/` tree.
 
-`POST_DEPLOY_TEMPLATE_SOURCE=github` — **ignore** the bind mount; **always** fetch `refs/heads/<ref>` tarball from GitHub before `coder templates push`. Use when you **never** trust the Coolify app directory. Requires outbound HTTPS to `github.com` (and **`POST_DEPLOY_GITHUB_TOKEN`** for private repos).
+That gives you a hard guarantee:
 
-## Mount-only
+- **Every redeploy** pushes the template.
+- The template is **always in sync** with the **deployed stack revision**.
+- Coolify’s **“preserve repo during deployment”** cannot leave you on stale Terraform.
 
-`POST_DEPLOY_TEMPLATE_SOURCE=mount` — **only** `/templates`. Fails if the checkout is stale. Use only if you guarantee **fresh** git checkouts on every deploy (e.g. disable “preserve repo” or force pull before compose).
+## `auto`
+
+`POST_DEPLOY_TEMPLATE_SOURCE=auto` is a softer mode:
+
+1. Use the bind-mounted `./template` → `/templates` **if** it passes sanity checks.
+2. If it does not, fetch the **exact `SOURCE_COMMIT`** when available.
+3. If `SOURCE_COMMIT` is unavailable, fall back to the configured GitHub ref.
+
+Use this if you want to prefer the local checkout for speed, but still recover safely.
+
+## `github_ref`
+
+`POST_DEPLOY_TEMPLATE_SOURCE=github_ref` ignores the mount and fetches the configured ref:
+
+- `POST_DEPLOY_GITHUB_REF`
+- `POST_DEPLOY_GITHUB_REF_TYPE` (`heads` or `tags`)
+
+Use this when you intentionally want a branch/tag-driven template source instead of the exact deployed commit.
+
+## `mount`
+
+`POST_DEPLOY_TEMPLATE_SOURCE=mount` uses only `/templates`.
+
+This is strict and only safe if you can **prove** Coolify refreshes the checkout on every deploy.
 
 ## Environment variables
 
 | Variable | Role |
 |----------|------|
-| `POST_DEPLOY_TEMPLATE_SOURCE` | `auto` (default) \| `mount` \| `github` |
+| `POST_DEPLOY_TEMPLATE_SOURCE` | `deployed_commit` (default) \| `auto` \| `github_ref` \| `mount` |
+| `SOURCE_COMMIT` | Set by Coolify; exact deployed commit SHA. Used by `deployed_commit` and `auto`. |
 | `POST_DEPLOY_GITHUB_REPO` | e.g. `owner/repo` (default in compose) |
-| `POST_DEPLOY_GITHUB_REF` | Branch or tag name (default `main`) |
+| `POST_DEPLOY_GITHUB_REF` | Branch or tag name (used by `github_ref`, fallback for `auto`) |
 | `POST_DEPLOY_GITHUB_REF_TYPE` | `heads` or `tags` |
 | `POST_DEPLOY_GITHUB_TOKEN` | Optional Bearer PAT for private repos |
 

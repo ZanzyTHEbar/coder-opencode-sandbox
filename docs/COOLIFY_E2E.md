@@ -1,6 +1,6 @@
 # E2E automation via Coolify
 
-**Template registration (no CI required):** Post-deploy runs **`coder templates push`** with **`POST_DEPLOY_TEMPLATE_SOURCE=auto`** by default — use the bind-mounted `template/` **if** it passes checks; **otherwise** fetch the same ref from **GitHub** inside the container. That way **“preserve repo during deployment”** cannot leave you on stale Terraform indefinitely. See **[TEMPLATE_REGISTRATION.md](TEMPLATE_REGISTRATION.md)**.
+**Template registration (no CI required):** Post-deploy runs **`coder templates push`** with **`POST_DEPLOY_TEMPLATE_SOURCE=deployed_commit`** by default — it fetches the exact **`SOURCE_COMMIT`** injected by Coolify, so the template always matches the deployed stack revision on every redeploy. See **[TEMPLATE_REGISTRATION.md](TEMPLATE_REGISTRATION.md)**.
 
 **Upstream Coder deployment:** Root [`docker-compose.yml`](../docker-compose.yml) is aligned with [Coder’s official `compose.yaml`](https://github.com/coder/coder/blob/main/compose.yaml) (Postgres, health checks, Docker socket). See [CODER_OFFICIAL_DEPLOYMENT.md](CODER_OFFICIAL_DEPLOYMENT.md) for ports (`4099` vs upstream `7080`), **`coolify` network**, optional **`DOCKER_GID` / `group_add`**, and **`CODER_VERSION`** pinning.
 
@@ -11,7 +11,7 @@ Set Coolify **Base directory** to **`.`** (repository root — leave empty if Co
 - `./template` → `/templates` (default `TEMPLATE_DIR` in `post-deploy.sh`)
 - `./coder-deployment` → `/deploy` (`post-deploy.sh` at `/deploy/post-deploy.sh`)
 
-With **`POST_DEPLOY_TEMPLATE_SOURCE=auto`** (default), post-deploy may **fetch** `template/` from GitHub **only when** the bind mount fails sanity checks (outbound HTTPS to `github.com`).
+With **`POST_DEPLOY_TEMPLATE_SOURCE=deployed_commit`** (default), post-deploy fetches the exact deployed commit from GitHub (outbound HTTPS to `github.com`).
 
 ### Why a subfolder base directory broke mounts
 
@@ -21,7 +21,7 @@ If **Base directory** is `coder-deployment`, Coolify’s deployment root is **on
 
 1. **Image** — Built and pushed to GHCR by GitHub Actions (or your own registry). The template defaults to `ghcr.io/zanzythebar/coder-opencode-sandbox:latest`.
 2. **Deploy Coder** — Coolify deploys with build-pack **Docker Compose** and **Base directory** **`.`** (repo root), using root `docker-compose.yml`.
-3. **Post-deploy** — `sh /deploy/post-deploy.sh` in the **coder** service (§3) runs **`coder templates push`**. With **`POST_DEPLOY_TEMPLATE_SOURCE=auto`** (default), a stale bind mount is **replaced** by a fetch from GitHub for that push. See [TEMPLATE_REGISTRATION.md](TEMPLATE_REGISTRATION.md).
+3. **Post-deploy** — `sh /deploy/post-deploy.sh` in the **coder** service (§3) runs **`coder templates push`**. With **`POST_DEPLOY_TEMPLATE_SOURCE=deployed_commit`** (default), the pushed template always comes from the exact deployed **`SOURCE_COMMIT`**, not the mount. See [TEMPLATE_REGISTRATION.md](TEMPLATE_REGISTRATION.md).
 
 ## Coolify setup
 
@@ -73,19 +73,20 @@ Coder’s stock defaults cap many API tokens at **168 hours (7 days)** via:
 
 **Alternatives if you refuse any long-lived secret in Coolify:**
 
-- **External CI** (if allowed): run `coder templates push` from a job with a short-lived token — not required for this stack; post-deploy **`auto`** mode covers staleness without CI.
+- **External CI** (if allowed): run `coder templates push` from a job with a short-lived token — not required for this stack; post-deploy **`deployed_commit`** mode already guarantees commit-level sync without CI.
 - **Manual / scheduled `coder templates push`** from an operator machine — no Coolify post-deploy.
 
 There is **no** documented way to run `coder templates push` with **zero** API credentials; Coder’s model is API tokens with configurable lifetimes and scopes.
 
 ### Post-deploy template source (`POST_DEPLOY_TEMPLATE_SOURCE`)
 
-Coolify bind-mounts **`./template` → `/templates`**. If **“preserve repo”** leaves an old tree, **`mount`** mode would register stale Terraform — so the **default is `auto`**: verify the mount; **if** it fails sanity checks (**`workspace_volume_bootstrap`** + **`user = "0:0"`** in `main.tf`), **fetch** `refs/heads/<ref>` from GitHub and push from that tree. **No GitHub Actions** involved.
+Coolify bind-mounts **`./template` → `/templates`**. If **“preserve repo”** leaves an old tree, the mount can be stale. The **default is `deployed_commit`**: ignore that risk and fetch the exact deployed **`SOURCE_COMMIT`** from GitHub for `coder templates push`. **No GitHub Actions** involved.
 
 | Value | Behavior |
 |--------|----------|
-| **`auto`** (default) | Use bind mount when healthy; **else** fetch tarball from GitHub (`POST_DEPLOY_GITHUB_*`). Best default when you **cannot** use CI for template push. |
-| **`github`** | **Always** fetch from GitHub — ignore mount (strict “never trust Coolify disk”). |
+| **`deployed_commit`** (default) | Fetch the exact **`SOURCE_COMMIT`** from GitHub. Strongest guarantee that template == deployed stack revision. |
+| **`auto`** | Prefer a verified mount; if stale, fall back to **`SOURCE_COMMIT`** (or configured ref if `SOURCE_COMMIT` is unavailable). |
+| **`github_ref`** | Fetch configured branch/tag (`POST_DEPLOY_GITHUB_REF*`) and ignore the mount. |
 | **`mount`** | Bind mount only — fails if stale; use only if you guarantee a fresh checkout every deploy. |
 
 Optional: **`POST_DEPLOY_GITHUB_TOKEN`** — Bearer token for **private** repos. Expose via **Coolify** / `.env`; **`docker-compose.yml`** passes it through.
@@ -166,7 +167,7 @@ Post-deploy only needs the **`CODER_TOKEN` env var** in the container, not an op
 | Step                     | Where it runs         | How |
 |--------------------------|------------------------|-----|
 | Build sandbox image      | GitHub Actions        | GHCR image (or your registry). |
-| Register/update template | Coolify post-deploy | `sh /deploy/post-deploy.sh` — **`POST_DEPLOY_TEMPLATE_SOURCE=auto`** (default) self-heals from GitHub if mount is stale. See [TEMPLATE_REGISTRATION.md](TEMPLATE_REGISTRATION.md). |
+| Register/update template | Coolify post-deploy | `sh /deploy/post-deploy.sh` — **`POST_DEPLOY_TEMPLATE_SOURCE=deployed_commit`** (default) pushes the exact deployed **`SOURCE_COMMIT`**. See [TEMPLATE_REGISTRATION.md](TEMPLATE_REGISTRATION.md). |
 | Deploy Coder             | Coolify               | Root `docker-compose.yml`, base **`.`**. |
 | Authentik OIDC           | One-time              | Run `scripts/create_authentik_oidc_coder.py` once. |
 
@@ -207,7 +208,7 @@ wc -c /data/coolify/applications/<uuid>/template/main.tf
 
 A current template should **include both strings** and **`main.tf`** should be on the order of **~9–10 KiB** (single-file `main.tf`; older layouts used `variables.tf`).
 
-**Fix:** Default **`POST_DEPLOY_TEMPLATE_SOURCE=auto`** fetches from GitHub when the mount fails checks — **no** GitHub Actions required. Optionally refresh the Coolify checkout so the bind mount matches **`main`** (fewer tarball fetches). For **strict** always-remote behavior, set **`github`**.
+**Fix:** Default **`POST_DEPLOY_TEMPLATE_SOURCE=deployed_commit`** fetches the exact deployed commit from GitHub — **no** GitHub Actions required. Optionally refresh the Coolify checkout so `auto`/`mount` also work. For branch/tag-driven behavior, set **`github_ref`**.
 
 **Legacy:** `POST_DEPLOY_SKIP_TEMPLATE_VERIFY=1` only affects strict **`mount`** mode (not recommended).
 

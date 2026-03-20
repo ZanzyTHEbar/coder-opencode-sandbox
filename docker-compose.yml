@@ -73,10 +73,10 @@ services:
       CODER_URL: ${CODER_URL:-http://127.0.0.1:4099}
       CODER_TOKEN: ${CODER_TOKEN:-}
       SANDBOX_IMAGE: ${SANDBOX_IMAGE:-ghcr.io/zanzythebar/coder-opencode-sandbox:latest}
-      # Post-deploy: auto = verify bind mount, else fetch template from GitHub (no CI required). See docs/TEMPLATE_REGISTRATION.md.
-      POST_DEPLOY_TEMPLATE_SOURCE: ${POST_DEPLOY_TEMPLATE_SOURCE:-auto}
+      # Post-deploy: deployed_commit = fetch exact SOURCE_COMMIT from GitHub and push that template. See docs/TEMPLATE_REGISTRATION.md.
+      POST_DEPLOY_TEMPLATE_SOURCE: ${POST_DEPLOY_TEMPLATE_SOURCE:-deployed_commit}
       POST_DEPLOY_GITHUB_REPO: ${POST_DEPLOY_GITHUB_REPO:-ZanzyTHEbar/coder-opencode-sandbox}
-      POST_DEPLOY_GITHUB_REF: ${POST_DEPLOY_GITHUB_REF:-main}
+      POST_DEPLOY_GITHUB_REF: ${POST_DEPLOY_GITHUB_REF:-}
       POST_DEPLOY_GITHUB_REF_TYPE: ${POST_DEPLOY_GITHUB_REF_TYPE:-heads}
       # Optional: GitHub PAT for private repos (Bearer). Must be passed through or post-deploy fetch is unauthenticated.
       POST_DEPLOY_GITHUB_TOKEN: ${POST_DEPLOY_GITHUB_TOKEN:-}

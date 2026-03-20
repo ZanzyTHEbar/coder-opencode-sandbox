@@ -3,25 +3,26 @@
 # Runs inside the Coder container when Coolify runs the post-deployment command.
 #
 # Template source (POST_DEPLOY_TEMPLATE_SOURCE):
-#   auto (default) — Use bind-mounted ./template → /templates if it passes sanity checks; else fetch tarball from
-#                    GitHub (POST_DEPLOY_GITHUB_*). Avoids stale Terraform when Coolify preserves an old checkout.
-#   mount          — Only the bind mount; fail if stale (strict).
-#   github         — Always fetch from GitHub; ignores mount.
+#   deployed_commit (default) — Fetch the exact Git commit being deployed via Coolify's SOURCE_COMMIT env.
+#                               Guarantees template == deployed stack revision on every redeploy.
+#   auto                      — Prefer the verified bind mount; if stale, fall back to deployed_commit (or GitHub ref).
+#   mount                     — Only the bind mount; fail if stale (strict).
+#   github_ref                — Fetch POST_DEPLOY_GITHUB_REF / POST_DEPLOY_GITHUB_REF_TYPE; ignores mount.
 #
 # Requires: CODER_URL (default http://127.0.0.1:4099), CODER_TOKEN (set in Coolify env).
 # Optional: SANDBOX_IMAGE, POST_DEPLOY_GITHUB_REPO, POST_DEPLOY_GITHUB_REF, POST_DEPLOY_GITHUB_REF_TYPE, POST_DEPLOY_GITHUB_TOKEN
 #
 # Coolify: post-deployment command MUST run in the **coder** service. See docs/COOLIFY_E2E.md.
-# Template registration without CI: see docs/TEMPLATE_REGISTRATION.md (default auto = self-heal from GitHub if mount stale).
+# Template registration without CI: see docs/TEMPLATE_REGISTRATION.md.
 set -e
 
 CODER_URL="${CODER_URL:-http://127.0.0.1:4099}"
 export CODER_URL
 SANDBOX_IMAGE="${SANDBOX_IMAGE:-ghcr.io/zanzythebar/coder-opencode-sandbox:latest}"
 MOUNT_TEMPLATE_DIR="${TEMPLATE_DIR:-/templates}"
-POST_DEPLOY_TEMPLATE_SOURCE="${POST_DEPLOY_TEMPLATE_SOURCE:-auto}"
+POST_DEPLOY_TEMPLATE_SOURCE="${POST_DEPLOY_TEMPLATE_SOURCE:-deployed_commit}"
 POST_DEPLOY_GITHUB_REPO="${POST_DEPLOY_GITHUB_REPO:-ZanzyTHEbar/coder-opencode-sandbox}"
-POST_DEPLOY_GITHUB_REF="${POST_DEPLOY_GITHUB_REF:-main}"
+POST_DEPLOY_GITHUB_REF="${POST_DEPLOY_GITHUB_REF:-}"
 POST_DEPLOY_GITHUB_REF_TYPE="${POST_DEPLOY_GITHUB_REF_TYPE:-heads}"
 
 # Set after resolve; may point at fetched tree under /tmp
@@ -39,14 +40,11 @@ template_verify_ok() {
     && grep -q 'user = "0:0"' "$_tf" 2>/dev/null
 }
 
-fetch_template_from_github() {
-  _repo="$POST_DEPLOY_GITHUB_REPO"
-  _ref="$POST_DEPLOY_GITHUB_REF"
-  _rtype="$POST_DEPLOY_GITHUB_REF_TYPE"
+fetch_template_archive() {
+  _url="$1"
   _tmpd="/tmp/coder-opencode-template-fetch.$$"
   rm -rf "$_tmpd"
   mkdir -p "$_tmpd"
-  _url="https://github.com/${_repo}/archive/refs/${_rtype}/${_ref}.tar.gz"
 
   echo "post-deploy: fetching template from ${_url}" >&2
   if command -v curl >/dev/null 2>&1; then
@@ -79,10 +77,30 @@ fetch_template_from_github() {
   echo "post-deploy: fetched template OK at $TEMPLATE_DIR" >&2
 }
 
+fetch_template_from_github_ref() {
+  _repo="$POST_DEPLOY_GITHUB_REPO"
+  _ref="$POST_DEPLOY_GITHUB_REF"
+  _rtype="$POST_DEPLOY_GITHUB_REF_TYPE"
+  if [ -z "$_ref" ]; then
+    _ref="main"
+  fi
+  fetch_template_archive "https://github.com/${_repo}/archive/refs/${_rtype}/${_ref}.tar.gz"
+}
+
+fetch_template_from_source_commit() {
+  if [ -z "${SOURCE_COMMIT:-}" ]; then
+    echo "post-deploy: FATAL: SOURCE_COMMIT is empty; cannot guarantee template matches deployed stack revision." >&2
+    echo "Use POST_DEPLOY_TEMPLATE_SOURCE=auto or github_ref only if exact deployed commit is unavailable." >&2
+    exit 1
+  fi
+  echo "post-deploy: using SOURCE_COMMIT=${SOURCE_COMMIT} as template source of truth" >&2
+  fetch_template_archive "https://github.com/${POST_DEPLOY_GITHUB_REPO}/archive/${SOURCE_COMMIT}.tar.gz"
+}
+
 resolve_template_dir() {
   case "$POST_DEPLOY_TEMPLATE_SOURCE" in
-    github)
-      fetch_template_from_github
+    deployed_commit)
+      fetch_template_from_source_commit
       ;;
     mount)
       TEMPLATE_DIR="$MOUNT_TEMPLATE_DIR"
@@ -93,19 +111,27 @@ resolve_template_dir() {
       fi
       if [ "${POST_DEPLOY_SKIP_TEMPLATE_VERIFY:-}" != "1" ] && ! template_verify_ok "$TEMPLATE_DIR"; then
         echo "post-deploy: FATAL: $TEMPLATE_DIR/main.tf missing bootstrap markers." >&2
-        echo "Fix: ensure Coolify deploy refreshes the git checkout, or set POST_DEPLOY_TEMPLATE_SOURCE=auto (default) or github." >&2
+        echo "Fix: ensure Coolify deploy refreshes the git checkout, or use POST_DEPLOY_TEMPLATE_SOURCE=deployed_commit/auto." >&2
         echo "See docs/TEMPLATE_REGISTRATION.md" >&2
         exit 1
       fi
       echo "post-deploy: using bind-mounted template at $TEMPLATE_DIR" >&2
+      ;;
+    github_ref|github)
+      fetch_template_from_github_ref
       ;;
     auto|*)
       TEMPLATE_DIR="$MOUNT_TEMPLATE_DIR"
       if template_verify_ok "$TEMPLATE_DIR"; then
         echo "post-deploy: bind-mounted template verified OK at $TEMPLATE_DIR" >&2
       else
-        echo "post-deploy: bind mount missing or stale; fetching from GitHub (${POST_DEPLOY_GITHUB_REPO} refs/${POST_DEPLOY_GITHUB_REF_TYPE}/${POST_DEPLOY_GITHUB_REF})..." >&2
-        fetch_template_from_github
+        if [ -n "${SOURCE_COMMIT:-}" ]; then
+          echo "post-deploy: bind mount missing or stale; fetching exact deployed commit SOURCE_COMMIT=${SOURCE_COMMIT}..." >&2
+          fetch_template_from_source_commit
+        else
+          echo "post-deploy: bind mount missing or stale; SOURCE_COMMIT unavailable, fetching configured GitHub ref..." >&2
+          fetch_template_from_github_ref
+        fi
       fi
       ;;
   esac

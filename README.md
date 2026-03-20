@@ -6,7 +6,7 @@ Per-user, isolated OpenCode sandboxes behind OIDC. Users log in via Authentik an
 
 - **Coder**: Control plane, OIDC login, workspace lifecycle (start/stop/delete), template provisioning.
 - **Authentik**: OIDC IdP; no Coder password auth.
-- **Template**: One workspace = one container + one persistent volume at `/home/coder`. **Registration:** Coolify **post-deploy** runs **`coder templates push`** with **`POST_DEPLOY_TEMPLATE_SOURCE=auto`** (default) — use bind-mounted `template/` when healthy, else fetch from GitHub. No CI required. See **[TEMPLATE_REGISTRATION.md](docs/TEMPLATE_REGISTRATION.md)**.
+- **Template**: One workspace = one container + one persistent volume at `/home/coder`. **Registration:** Coolify **post-deploy** runs **`coder templates push`** with **`POST_DEPLOY_TEMPLATE_SOURCE=deployed_commit`** (default) — fetch the exact deployed `SOURCE_COMMIT` from GitHub. No CI required. See **[TEMPLATE_REGISTRATION.md](docs/TEMPLATE_REGISTRATION.md)**.
 - **OpenCode**: Runs unchanged inside the container; state under `~/.local/share/opencode` and `~/.config/opencode` (on the volume).
 
 ## Repository layout
@@ -29,7 +29,7 @@ A public image is built and published via [GitHub Actions](.github/workflows/bui
 
 1. Deploy Coder and configure OIDC (Authentik). See [docs/OPERATOR.md](docs/OPERATOR.md), [docs/CODER_OFFICIAL_DEPLOYMENT.md](docs/CODER_OFFICIAL_DEPLOYMENT.md) (upstream `compose.yaml` parity), and [docs/authentik/OIDC_SETUP.md](docs/authentik/OIDC_SETUP.md).
 2. Image is built by CI to GHCR; the template defaults to it. No local build needed.
-3. Register the template: Coolify **post-deploy** `sh /deploy/post-deploy.sh` with **`CODER_TOKEN`** ([docs/COOLIFY_E2E.md](docs/COOLIFY_E2E.md)); default **`POST_DEPLOY_TEMPLATE_SOURCE=auto`** avoids stale mounts without CI ([docs/TEMPLATE_REGISTRATION.md](docs/TEMPLATE_REGISTRATION.md)). Or `./scripts/bootstrap-template.sh` manually.
+3. Register the template: Coolify **post-deploy** `sh /deploy/post-deploy.sh` with **`CODER_TOKEN`** ([docs/COOLIFY_E2E.md](docs/COOLIFY_E2E.md)); default **`POST_DEPLOY_TEMPLATE_SOURCE=deployed_commit`** avoids stale mounts without CI ([docs/TEMPLATE_REGISTRATION.md](docs/TEMPLATE_REGISTRATION.md)). Or `./scripts/bootstrap-template.sh` manually.
 4. Users create a workspace from the template and use the **OpenCode** app and **Terminal**. See [docs/USER.md](docs/USER.md).
 
 ## Persistence

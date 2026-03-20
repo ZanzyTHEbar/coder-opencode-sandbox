@@ -20,7 +20,7 @@ docker inspect "$CID" --format 'User={{.Config.User}}'
 |--------------|--------|
 | `bootstrap.log` **missing** or **no** `bootstrap ok` line | Bootstrap/init didn’t run as expected, or **old template** (template not pushed / workspace not updated). |
 | `bootstrap ok` but startup shows **`HOME writable: NO`** or **`FATAL`** on `mkdir` | **Agent** phase: wrong user, **`HOME`**, or perms **after** bootstrap. |
-| `docker inspect` **`User=`** not **`0:0`** | Workspace isn’t using current template (`user = "0:0"`). Often **stale `./template` on the Coolify host**. Fix: redeploy with **`POST_DEPLOY_TEMPLATE_SOURCE=auto`** (default) or **`github`** so post-deploy fetches from GitHub when the mount is wrong — see [TEMPLATE_REGISTRATION.md](TEMPLATE_REGISTRATION.md). |
+| `docker inspect` **`User=`** not **`0:0`** | Workspace isn’t using current template (`user = "0:0"`). Often **stale `./template` on the Coolify host**. Fix: redeploy with **`POST_DEPLOY_TEMPLATE_SOURCE=deployed_commit`** (default) so post-deploy fetches the exact deployed **`SOURCE_COMMIT`** from GitHub — see [TEMPLATE_REGISTRATION.md](TEMPLATE_REGISTRATION.md). |
 
 Then fix the **specific** row (re-push template, fix image, etc.) — don’t stack random `chown`/`sudo` attempts.
 
