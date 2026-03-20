@@ -1,20 +1,15 @@
 #!/bin/sh
-# Post-deployment script: register/update the opencode-sandbox template in Coder.
-# Runs inside the Coder container when Coolify runs the post-deployment command.
+# Register or update the opencode-sandbox template in Coder.
+# Runs inside the Coder container from the Coolify post-deployment command.
 #
 # Template source (POST_DEPLOY_TEMPLATE_SOURCE):
-#   deployed_commit (default) — Fetch the exact Git commit being deployed via Coolify's SOURCE_COMMIT env,
-#                               sync it back into ./template, then push that exact tree.
-#   auto                      — Use the bind mount only when it is verified AND already stamped with SOURCE_COMMIT;
-#                               otherwise fetch exact deployed commit (or GitHub ref), sync it back, then push.
+#   deployed_commit (default) — Fetch the exact deployed commit, sync it back into `./template`, then push it.
+#   auto                      — Use the bind mount only when it already matches `SOURCE_COMMIT`; otherwise fetch and sync.
 #   mount                     — Only the bind mount; fail if stale (strict).
 #   github_ref                — Fetch POST_DEPLOY_GITHUB_REF / POST_DEPLOY_GITHUB_REF_TYPE; ignores mount.
 #
 # Requires: CODER_URL (default http://127.0.0.1:4099), CODER_TOKEN (set in Coolify env).
-# Optional: SANDBOX_IMAGE, POST_DEPLOY_GITHUB_REPO, POST_DEPLOY_GITHUB_REF, POST_DEPLOY_GITHUB_REF_TYPE, POST_DEPLOY_GITHUB_TOKEN
-#
-# Coolify: post-deployment command MUST run in the **coder** service. See docs/COOLIFY_E2E.md.
-# Template registration without CI: see docs/TEMPLATE_REGISTRATION.md.
+# Optional: SANDBOX_IMAGE, POST_DEPLOY_GITHUB_REPO, POST_DEPLOY_GITHUB_REF, POST_DEPLOY_GITHUB_REF_TYPE, POST_DEPLOY_GITHUB_TOKEN.
 set -e
 
 CODER_URL="${CODER_URL:-http://127.0.0.1:4099}"
@@ -28,20 +23,47 @@ POST_DEPLOY_GITHUB_REF_TYPE="${POST_DEPLOY_GITHUB_REF_TYPE:-heads}"
 POST_DEPLOY_SYNC_TEMPLATE_MOUNT="${POST_DEPLOY_SYNC_TEMPLATE_MOUNT:-1}"
 TEMPLATE_SOURCE_STAMP_FILE=".coolify-source-commit"
 
-# Set after resolve; may point at fetched tree under /tmp
+# Set after resolve; may point at a fetched tree under `/tmp`.
 TEMPLATE_DIR=""
-# Temp dir to rm after successful push (only when fetched)
+# Remove this after a successful push when a fetch was required.
 FETCH_TMPDIR=""
 
 echo "post-deploy: start host=$(hostname 2>/dev/null || echo unknown) date=$(date -Iseconds 2>/dev/null || date) source=${POST_DEPLOY_TEMPLATE_SOURCE}" >&2
 
-# Must include volume bootstrap + root user or workspaces get root-owned /home/coder (permission denied on mkdir).
-template_verify_ok() {
+# Require the volume bootstrap and root user override so workspaces do not come up with a root-owned home volume.
+# Accept both the legacy single-file template and the split root module layout.
+legacy_template_verify_ok() {
   _dir="$1"
   _tf="$_dir/main.tf"
-  [ -r "$_tf" ] && grep -q 'workspace_volume_bootstrap' "$_tf" 2>/dev/null \
-    && grep -q 'user = "0:0"' "$_tf" 2>/dev/null \
-    && [ ! -e "$_dir/variables.tf" ]
+
+  [ -r "$_tf" ] || return 1
+  grep -q 'workspace_volume_bootstrap' "$_tf" 2>/dev/null || return 1
+  grep -q 'user = "0:0"' "$_tf" 2>/dev/null || return 1
+  [ ! -e "$_dir/variables.tf" ]
+}
+
+split_template_verify_ok() {
+  _dir="$1"
+
+  [ -r "$_dir/main.tf" ] || return 1
+  [ -r "$_dir/versions.tf" ] || return 1
+  [ -r "$_dir/variables.tf" ] || return 1
+  [ -r "$_dir/data.tf" ] || return 1
+  [ -r "$_dir/locals.tf" ] || return 1
+  [ -r "$_dir/docker.tf" ] || return 1
+  [ -r "$_dir/coder.tf" ] || return 1
+  [ -r "$_dir/scripts/volume_bootstrap.sh.tpl" ] || return 1
+  [ -r "$_dir/scripts/agent_startup.sh.tpl" ] || return 1
+
+  grep -q 'workspace_volume_bootstrap' "$_dir/locals.tf" 2>/dev/null || return 1
+  grep -q 'user = "0:0"' "$_dir/docker.tf" 2>/dev/null || return 1
+}
+
+template_verify_ok() {
+  _dir="$1"
+
+  split_template_verify_ok "$_dir" && return 0
+  legacy_template_verify_ok "$_dir"
 }
 
 template_mount_matches_source_commit() {
@@ -117,7 +139,7 @@ fetch_template_archive() {
   FETCH_TMPDIR="$_tmpd"
 
   if ! template_verify_ok "$TEMPLATE_DIR"; then
-    echo "post-deploy: FATAL: fetched template failed sanity check (expected bootstrap + user=0:0 in main.tf)" >&2
+    echo "post-deploy: FATAL: fetched template failed sanity check (expected legacy or split layout with bootstrap + user=0:0 markers)" >&2
     rm -rf "$_tmpd"
     exit 1
   fi
@@ -157,7 +179,7 @@ resolve_template_dir() {
         exit 1
       fi
       if [ "${POST_DEPLOY_SKIP_TEMPLATE_VERIFY:-}" != "1" ] && ! template_verify_ok "$TEMPLATE_DIR"; then
-        echo "post-deploy: FATAL: $TEMPLATE_DIR/main.tf missing bootstrap markers." >&2
+        echo "post-deploy: FATAL: $TEMPLATE_DIR failed template sanity checks for the expected legacy or split layout." >&2
         echo "Fix: ensure Coolify deploy refreshes the git checkout, or use POST_DEPLOY_TEMPLATE_SOURCE=deployed_commit/auto." >&2
         echo "See docs/TEMPLATE_REGISTRATION.md" >&2
         exit 1

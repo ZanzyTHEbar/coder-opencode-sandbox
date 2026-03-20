@@ -1,47 +1,41 @@
 # Coder + OpenCode Sandbox
 
-Per-user, isolated OpenCode sandboxes behind OIDC. Users log in via Authentik and get a dedicated workspace with OpenCode web UI, terminal, and persistent state.
+Per-user OpenCode sandboxes behind OIDC. Users log in via Authentik and get a dedicated workspace with the OpenCode web UI, terminal access, and persistent state.
 
 ## Architecture
 
 - **Coder**: Control plane, OIDC login, workspace lifecycle (start/stop/delete), template provisioning.
 - **Authentik**: OIDC IdP; no Coder password auth.
-- **Template**: One workspace = one container + one persistent volume at `/home/coder`. **Registration:** Coolify **post-deploy** runs **`coder templates push`** with **`POST_DEPLOY_TEMPLATE_SOURCE=deployed_commit`** (default) — fetch the exact deployed `SOURCE_COMMIT` from GitHub. No CI required. See **[TEMPLATE_REGISTRATION.md](docs/TEMPLATE_REGISTRATION.md)**.
-- **OpenCode**: Runs unchanged inside the container; state under `~/.local/share/opencode` and `~/.config/opencode` (on the volume).
+- **Template**: One workspace = one container + one persistent volume at `/home/coder`. Template registration is handled by Coolify post-deploy with `POST_DEPLOY_TEMPLATE_SOURCE=deployed_commit` by default. See [docs/TEMPLATE_REGISTRATION.md](docs/TEMPLATE_REGISTRATION.md).
+- **OpenCode**: Runs unchanged inside the container; state under `~/.local/share/opencode` and `~/.config/opencode` (on the volume). Workspaces can also provision a linked `~/workspace/.opencode` from a user-supplied Git URL or GitHub repo/tree/blob URL at creation time; that project-local path is separate from user-level settings in `~/.config/opencode`.
 
 ## Repository layout
 
 | Path | Purpose |
 |------|--------|
-| `docker-compose.yml` | Reference Coder deployment (repo root so `template/` and `coder-deployment/` bind-mount correctly; e.g. Coolify base **`.`**). |
-| `template/` | Terraform template (volume, container, agent, OpenCode app). Default `sandbox_image` = GHCR image. |
-| `image/` | Dockerfile for the sandbox image (Linux + OpenCode + Coder agent); built by CI to GHCR. |
-| `coder-deployment/` | `.env.example`, `post-deploy.sh`, [README](coder-deployment/README.md) (Compose lives at repo root). |
-| `scripts/` | [bootstrap-template.sh](scripts/bootstrap-template.sh) (register template in Coder), [create_authentik_oidc_coder.py](scripts/create_authentik_oidc_coder.py) (Authentik OIDC). |
-| `docs/` | Operator and user guides; **[TEMPLATE_REGISTRATION](docs/TEMPLATE_REGISTRATION.md)** (post-deploy template push), [E2E_AUTOMATION](docs/E2E_AUTOMATION.md), [Coder official deployment parity](docs/CODER_OFFICIAL_DEPLOYMENT.md), Authentik OIDC, [BACKUP](docs/BACKUP.md), [WILDCARD_APP_URLS](docs/WILDCARD_APP_URLS.md), [Pangolin Traefik wildcard](docs/PANGOLIN_TRAEFIK_WILDCARD.md), [IMPROVEMENTS](docs/IMPROVEMENTS.md). |
-| `VERSION` | Template version (e.g. 1.0.0); see OPERATOR §9. |
+| `docker-compose.yml` | Coder deployment stack. Keep Coolify base directory at `.` so `template/` and `coder-deployment/` bind-mount correctly. |
+| `template/` | Terraform template for the workspace volume, container, agent, and OpenCode app. |
+| `image/` | Dockerfile for the sandbox image; built by CI to GHCR. |
+| `coder-deployment/` | Deployment helpers, including `.env.example` and `post-deploy.sh`. |
+| `scripts/` | Manual helpers such as `bootstrap-template.sh` and the Authentik OIDC setup script. |
+| `docs/` | Operator and user guides, deployment notes, wildcard app URL docs, and improvement backlog. |
+| `VERSION` | Template version marker. |
 
 ## Pre-built image (GHCR)
 
-A public image is built and published via [GitHub Actions](.github/workflows/build-push-image.yml) on every push to `main`. Use the image as the template variable `sandbox_image` to skip building locally.
+A public image is built and published via [GitHub Actions](.github/workflows/build-push-image.yml) on every push to `main`. The template defaults to that image, so local builds are optional.
 
 ## Quick start (operators)
 
-1. Deploy Coder and configure OIDC (Authentik). See [docs/OPERATOR.md](docs/OPERATOR.md), [docs/CODER_OFFICIAL_DEPLOYMENT.md](docs/CODER_OFFICIAL_DEPLOYMENT.md) (upstream `compose.yaml` parity), and [docs/authentik/OIDC_SETUP.md](docs/authentik/OIDC_SETUP.md).
-2. Image is built by CI to GHCR; the template defaults to it. No local build needed.
-3. Register the template: Coolify **post-deploy** `sh /deploy/post-deploy.sh` with **`CODER_TOKEN`** ([docs/COOLIFY_E2E.md](docs/COOLIFY_E2E.md)); default **`POST_DEPLOY_TEMPLATE_SOURCE=deployed_commit`** avoids stale mounts without CI ([docs/TEMPLATE_REGISTRATION.md](docs/TEMPLATE_REGISTRATION.md)). Or `./scripts/bootstrap-template.sh` manually.
-4. Users create a workspace from the template and use the **OpenCode** app and **Terminal**. See [docs/USER.md](docs/USER.md).
+1. Deploy Coder and configure OIDC. See [docs/OPERATOR.md](docs/OPERATOR.md), [docs/CODER_OFFICIAL_DEPLOYMENT.md](docs/CODER_OFFICIAL_DEPLOYMENT.md), and [docs/authentik/OIDC_SETUP.md](docs/authentik/OIDC_SETUP.md).
+2. Use the default GHCR sandbox image or build your own.
+3. Register the template with Coolify post-deploy (`sh /deploy/post-deploy.sh`) or run `./scripts/bootstrap-template.sh` manually. See [docs/COOLIFY_E2E.md](docs/COOLIFY_E2E.md) and [docs/TEMPLATE_REGISTRATION.md](docs/TEMPLATE_REGISTRATION.md).
+4. Create a workspace from the template, optionally supply an OpenCode config URL, and use the OpenCode app and terminal. If `~/workspace/.opencode` is already user-managed, the startup script leaves it in place and logs a warning instead of replacing it. See [docs/USER.md](docs/USER.md).
 
 ## Persistence
 
-- **Across stop/start**: Everything under `/home/coder` (OpenCode DB, config, code, shell history) is on a persistent volume; it survives workspace stop and is back when the workspace starts again.
-- **Across delete**: Deleting a workspace runs `terraform destroy` and removes the volume. For long-term retention, use "stop" instead of "delete," or run a [backup before delete](docs/BACKUP.md).
-
-## Optional and improvements
-
-- **Stable app URLs:** [Wildcard app URLs](docs/WILDCARD_APP_URLS.md) (DNS + TLS + `CODER_WILDCARD_ACCESS_URL`).
-- **Template versioning:** See [OPERATOR.md](docs/OPERATOR.md#9-template-versioning-and-upgrades) and the root `VERSION` file.
-- **What we're missing / how to do better:** [docs/IMPROVEMENTS.md](docs/IMPROVEMENTS.md) (backup, wildcard, versioning, CI, resource limits, smoke-test, etc.).
+- **Across stop/start**: Everything under `/home/coder` (OpenCode DB, config, code, shell history, and any provisioned OpenCode profile cache) is on a persistent volume; it survives workspace stop and is back when the workspace starts again.
+- **Across delete**: Deleting a workspace runs `terraform destroy` and removes the volume. For long-term retention, stop the workspace instead of deleting it, or run a [backup before delete](docs/BACKUP.md).
 
 ## License
 
