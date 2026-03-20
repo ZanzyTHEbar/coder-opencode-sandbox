@@ -37,12 +37,6 @@ A public image is built and published via [GitHub Actions](.github/workflows/bui
 - **Across stop/start**: Everything under `/home/coder` (OpenCode DB, config, code, shell history, and any provisioned OpenCode profile cache) is on a persistent volume; it survives workspace stop and is back when the workspace starts again.
 - **Across delete**: Deleting a workspace runs `terraform destroy` and removes the volume. For long-term retention, stop the workspace instead of deleting it, or run a [backup before delete](docs/BACKUP.md).
 
-## Optional and improvements
-
-- **Stable app URLs:** [Wildcard app URLs](docs/WILDCARD_APP_URLS.md) (DNS + TLS + `CODER_WILDCARD_ACCESS_URL`).
-- **Template versioning:** See [OPERATOR.md](docs/OPERATOR.md#9-template-versioning-and-upgrades) and the root `VERSION` file.
-- **Backlog and future improvements:** [docs/IMPROVEMENTS.md](docs/IMPROVEMENTS.md).
-
 ## License
 
 Same as parent project.
