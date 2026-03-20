@@ -1,20 +1,15 @@
 #!/bin/sh
-# Post-deployment script: register/update the opencode-sandbox template in Coder.
-# Runs inside the Coder container when Coolify runs the post-deployment command.
+# Register or update the opencode-sandbox template in Coder.
+# Runs inside the Coder container from the Coolify post-deployment command.
 #
 # Template source (POST_DEPLOY_TEMPLATE_SOURCE):
-#   deployed_commit (default) — Fetch the exact Git commit being deployed via Coolify's SOURCE_COMMIT env,
-#                               sync it back into ./template, then push that exact tree.
-#   auto                      — Use the bind mount only when it is verified AND already stamped with SOURCE_COMMIT;
-#                               otherwise fetch exact deployed commit (or GitHub ref), sync it back, then push.
+#   deployed_commit (default) — Fetch the exact deployed commit, sync it back into `./template`, then push it.
+#   auto                      — Use the bind mount only when it already matches `SOURCE_COMMIT`; otherwise fetch and sync.
 #   mount                     — Only the bind mount; fail if stale (strict).
 #   github_ref                — Fetch POST_DEPLOY_GITHUB_REF / POST_DEPLOY_GITHUB_REF_TYPE; ignores mount.
 #
 # Requires: CODER_URL (default http://127.0.0.1:4099), CODER_TOKEN (set in Coolify env).
-# Optional: SANDBOX_IMAGE, POST_DEPLOY_GITHUB_REPO, POST_DEPLOY_GITHUB_REF, POST_DEPLOY_GITHUB_REF_TYPE, POST_DEPLOY_GITHUB_TOKEN
-#
-# Coolify: post-deployment command MUST run in the **coder** service. See docs/COOLIFY_E2E.md.
-# Template registration without CI: see docs/TEMPLATE_REGISTRATION.md.
+# Optional: SANDBOX_IMAGE, POST_DEPLOY_GITHUB_REPO, POST_DEPLOY_GITHUB_REF, POST_DEPLOY_GITHUB_REF_TYPE, POST_DEPLOY_GITHUB_TOKEN.
 set -e
 
 CODER_URL="${CODER_URL:-http://127.0.0.1:4099}"
@@ -28,14 +23,14 @@ POST_DEPLOY_GITHUB_REF_TYPE="${POST_DEPLOY_GITHUB_REF_TYPE:-heads}"
 POST_DEPLOY_SYNC_TEMPLATE_MOUNT="${POST_DEPLOY_SYNC_TEMPLATE_MOUNT:-1}"
 TEMPLATE_SOURCE_STAMP_FILE=".coolify-source-commit"
 
-# Set after resolve; may point at fetched tree under /tmp
+# Set after resolve; may point at a fetched tree under `/tmp`.
 TEMPLATE_DIR=""
-# Temp dir to rm after successful push (only when fetched)
+# Remove this after a successful push when a fetch was required.
 FETCH_TMPDIR=""
 
 echo "post-deploy: start host=$(hostname 2>/dev/null || echo unknown) date=$(date -Iseconds 2>/dev/null || date) source=${POST_DEPLOY_TEMPLATE_SOURCE}" >&2
 
-# Must include volume bootstrap + root user or workspaces get root-owned /home/coder (permission denied on mkdir).
+# Require the volume bootstrap and root user override so workspaces do not come up with a root-owned home volume.
 template_verify_ok() {
   _dir="$1"
   _tf="$_dir/main.tf"

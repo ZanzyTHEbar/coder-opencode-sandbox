@@ -1,21 +1,17 @@
-# Reference Coder deployment (Docker Compose).
-#
-# Upstream reference (keep in sync when bumping Coder / Postgres patterns):
+# Reference Coder deployment.
+# Upstream reference:
 #   https://github.com/coder/coder/blob/main/compose.yaml
 # Docs: https://coder.com/docs/install/docker
 #
-# Repo root is the Compose project directory so bind mounts resolve:
+# Keep Compose at repo root so these bind mounts resolve:
 #   ./template → /templates (for coder templates push)
 #   ./coder-deployment → /deploy (for post-deploy.sh)
 #
-# Coolify: build-pack Docker Compose, Base directory: . (repo root).
-#
-# This stack adds: dedicated PostgreSQL (same pattern as upstream), external `coolify` network,
-# OIDC/token env for Authentik, HTTP on 4099 (upstream defaults to 7080 — see docs/CODER_OFFICIAL_DEPLOYMENT.md).
+# Coolify base directory: `.`
+# This stack adds PostgreSQL, the external `coolify` network, OIDC env, and HTTP on 4099.
 
 services:
   database:
-    # Minimum supported major version is 13 (Coder docs). Upstream uses postgres:17.
     image: postgres:17
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-coder}
@@ -37,25 +33,19 @@ services:
     networks:
       - coolify
 
-  # Coolify: Post-deployment command must run **in this service** (`coder`), not `database`.
-  # Command: `sh /deploy/post-deploy.sh` — see docs/COOLIFY_E2E.md if the template does not update on redeploy.
+  # Run the post-deploy command in this service, not `database`.
   coder:
     image: ghcr.io/coder/coder:${CODER_VERSION:-latest}
     depends_on:
       database:
         condition: service_healthy
-    # Do not set command: server — image ENTRYPOINT is ["/opt/coder", "server"].
-    # Run as root so post-deploy can rewrite the bind-mounted ./template directory and delete stale files
-    # left behind by Coolify's preserved checkout. Workspace containers still run under the template's own user settings.
+    # Let the image entrypoint start Coder server.
+    # Run as root so post-deploy can rewrite the bind-mounted template directory.
     user: "0:0"
     environment:
-      # Same shape as upstream compose.yaml (host defaults to port 5432).
       CODER_PG_CONNECTION_URL: "postgresql://${POSTGRES_USER:-coder}:${POSTGRES_PASSWORD:-changeme}@database/${POSTGRES_DB:-coder}?sslmode=disable"
-      # Must be a URL workspaces and users can reach (not localhost for non-local templates). Set in Coolify / .env.
       CODER_ACCESS_URL: ${CODER_ACCESS_URL:-https://dev.example.com}
-      # Required for subdomain workspace apps (OpenCode SPA) and VS Code Desktop SSH hostnames.
-      # Example: CODER_ACCESS_URL=https://dev.zacariahheim.com → set *.dev.zacariahheim.com in DNS + TLS + proxy route to Coder.
-      # https://coder.com/docs/admin/networking/wildcard-access-url
+      # Required for subdomain workspace apps and VS Code Desktop SSH hostnames.
       CODER_WILDCARD_ACCESS_URL: ${CODER_WILDCARD_ACCESS_URL:-}
       CODER_HTTP_ADDRESS: "0.0.0.0:4099"
       CODER_DEFAULT_TOKEN_LIFETIME: ${CODER_DEFAULT_TOKEN_LIFETIME:-8760h}
@@ -65,31 +55,23 @@ services:
       CODER_OIDC_CLIENT_SECRET: ${CODER_OIDC_CLIENT_SECRET:-}
       CODER_OIDC_EMAIL_FIELD: ${CODER_OIDC_EMAIL_FIELD:-email}
       CODER_OIDC_USERNAME_FIELD: ${CODER_OIDC_USERNAME_FIELD:-preferred_username}
-      # Quoted so Compose always passes a string to Coder (bootstrap may set false in .env).
       CODER_DISABLE_PASSWORD_AUTH: "${CODER_DISABLE_PASSWORD_AUTH:-true}"
       CODER_PROVISIONER_DAEMON: "true"
-      # Helps workspace agents / DERP behind reverse proxies (Traefik, Coolify).
       CODER_DERP_FORCE_WEBSOCKETS: "${CODER_DERP_FORCE_WEBSOCKETS:-true}"
-      # Prefer relay when direct P2P fails through NAT / complex Docker routing (optional hardening).
       CODER_BLOCK_DIRECT: "${CODER_BLOCK_DIRECT:-true}"
       DOCKER_HOST: "unix:///var/run/docker.sock"
       CODER_URL: ${CODER_URL:-http://127.0.0.1:4099}
       CODER_TOKEN: ${CODER_TOKEN:-}
       SANDBOX_IMAGE: ${SANDBOX_IMAGE:-ghcr.io/zanzythebar/coder-opencode-sandbox:latest}
-      # Post-deploy: deployed_commit = fetch exact SOURCE_COMMIT from GitHub and push that template. See docs/TEMPLATE_REGISTRATION.md.
       POST_DEPLOY_TEMPLATE_SOURCE: ${POST_DEPLOY_TEMPLATE_SOURCE:-deployed_commit}
       POST_DEPLOY_GITHUB_REPO: ${POST_DEPLOY_GITHUB_REPO:-ZanzyTHEbar/coder-opencode-sandbox}
       POST_DEPLOY_GITHUB_REF: ${POST_DEPLOY_GITHUB_REF:-}
       POST_DEPLOY_GITHUB_REF_TYPE: ${POST_DEPLOY_GITHUB_REF_TYPE:-heads}
-      # Optional: GitHub PAT for private repos (Bearer). Must be passed through or post-deploy fetch is unauthenticated.
       POST_DEPLOY_GITHUB_TOKEN: ${POST_DEPLOY_GITHUB_TOKEN:-}
-      # Keep the host-side ./template tree synced to the exact source used for the push, including deletions.
       POST_DEPLOY_SYNC_TEMPLATE_MOUNT: "${POST_DEPLOY_SYNC_TEMPLATE_MOUNT:-1}"
     labels:
-      # Coolify creates routers only for the primary hostname. Coder workspace apps use dynamic wildcard subdomains,
-      # so add explicit Traefik routers that forward workspace subdomains to the Coder service itself.
-      # Traefik v3 expects pure regex syntax here; `[a-z0-9-]+` allows names like:
-      # `opencode--orange-owl-37--zanzythebar`.
+      # Coolify only creates routers for the primary hostname, so add explicit wildcard routers for workspace apps.
+      # Traefik v3 expects pure regex syntax here.
       traefik.enable: "true"
       traefik.http.middlewares.coder-wildcard-redirect.redirectscheme.scheme: "https"
       traefik.http.routers.coder-wildcard-http.entrypoints: "http"
@@ -106,8 +88,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./template:/templates
       - ./coder-deployment:/deploy:ro
-    # `coder templates push` runs Terraform against docker.sock during import.
-    # Keep DOCKER_GID aligned with the host for consistency with future non-root runs and derived images.
+    # Keep DOCKER_GID aligned with the host.
     group_add:
       - "${DOCKER_GID:-996}"
     ports:

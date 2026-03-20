@@ -9,8 +9,7 @@ terraform {
   }
 }
 
-# Variables (co-located with root module so editors/terraform-ls resolve them when this file is the focus).
-# Reserved for future use: per-template Docker host override.
+# Variables live with the root module so editors and terraform-ls resolve them cleanly.
 variable "docker_socket" {
   default     = ""
   description = "Reserved. Docker is configured via Coder deployment (DOCKER_HOST). Leave empty."
@@ -37,10 +36,34 @@ data "coder_provisioner" "me" {}
 data "coder_workspace" "me" {}
 data "coder_workspace_owner" "me" {}
 
-# ------------------------------------------------------------------------------
+data "coder_parameter" "opencode_config_url" {
+  name         = "opencode_config_url"
+  display_name = "OpenCode config URL"
+  description  = "Optional Git or GitHub URL to provision as ~/workspace/.opencode. Supports repo URLs and GitHub tree URLs."
+  type         = "string"
+  default      = ""
+  mutable      = true
+}
+
+data "coder_parameter" "opencode_config_ref" {
+  name         = "opencode_config_ref"
+  display_name = "OpenCode config ref"
+  description  = "Optional branch, tag, or commit override for the OpenCode config URL."
+  type         = "string"
+  default      = ""
+  mutable      = true
+}
+
+data "coder_parameter" "opencode_config_subdir" {
+  name         = "opencode_config_subdir"
+  display_name = "OpenCode config subdirectory"
+  description  = "Optional path inside the fetched repo. Leave empty to auto-detect .opencode or use the repo root."
+  type         = "string"
+  default      = ""
+  mutable      = true
+}
+
 # Persistent volume: one per workspace, survives stop/start.
-# Name uses workspace id only (immutable) so renames do not recreate the volume.
-# ------------------------------------------------------------------------------
 
 resource "docker_volume" "home" {
   name = "coder-${data.coder_workspace.me.id}-home"
@@ -49,28 +72,20 @@ resource "docker_volume" "home" {
   }
 }
 
-# ------------------------------------------------------------------------------
-# Sandbox image (built from ../image; operator sets var.sandbox_image)
-# ------------------------------------------------------------------------------
+# Sandbox image (built from `image/`; operator sets `var.sandbox_image`).
 
 resource "docker_image" "sandbox" {
   name = var.sandbox_image
 }
 
-# ------------------------------------------------------------------------------
-# Workspace container: only exists when workspace is started.
-# Container name must match [a-zA-Z0-9][a-zA-Z0-9_.-]* (max 63 chars).
-# ------------------------------------------------------------------------------
+# Workspace container: created only while the workspace is running.
 
 locals {
-  # Docker container name: [a-zA-Z0-9][a-zA-Z0-9_.-]*, max 63 chars. Sanitize and truncate.
+  # Docker names must match [a-zA-Z0-9][a-zA-Z0-9_.-]* and stay under 63 chars.
   _sanitized     = replace(replace(replace("${data.coder_workspace_owner.me.name}-${data.coder_workspace.me.name}", " ", "-"), "/", "-"), "\\", "-")
   container_name = "coder-${substr(local._sanitized, 0, min(57, length(local._sanitized)))}"
 
-  # Must run *before* the rest of coder_agent.main.init_script (agent touches $HOME early).
-  # Run as root (see docker_container.user): named volumes are root:root — sudo can still fail in some
-  # Docker/seccomp setups; real root avoids that. Coder's init then continues (agent runs as non-root).
-  # Writes /home/coder/.coder-debug/bootstrap.log for evidence-based debugging (see docs/DEBUG_WORKSPACE_VOLUME.md).
+  # Run before the agent init script so the home volume is writable before the agent touches it.
   workspace_volume_bootstrap = <<-EOT
 set -e
 export HOME=/home/coder
@@ -103,7 +118,7 @@ resource "docker_container" "workspace" {
   image = docker_image.sandbox.image_id
   name  = local.container_name
 
-  # Override image USER (coder): bootstrap must fix volume ownership as real root; sudo is unreliable here.
+  # Override the image USER so bootstrap can fix ownership on the named volume.
   user = "0:0"
 
   hostname = data.coder_workspace.me.name
@@ -114,8 +129,7 @@ resource "docker_container" "workspace" {
     read_only      = false
   }
 
-  # Same pattern as Coder's docker template: agent init script may reference 127.0.0.1/localhost; map to host gateway.
-  # https://github.com/coder/coder/blob/main/examples/templates/docker/main.tf
+  # Match Coder's docker template and expose the host gateway inside the workspace.
   host {
     host = "host.docker.internal"
     ip   = "host-gateway"
@@ -128,10 +142,7 @@ resource "docker_container" "workspace" {
     }
   }
 
-  # Our image sets CMD (no ENTRYPOINT); use command so we don't stack image CMD + entrypoint.
-  # Do NOT rewrite 127.0.0.1 in the init script: OpenCode must bind and answer on loopback inside
-  # the workspace (Coder app healthcheck uses localhost). Replacing with host.docker.internal breaks that.
-  # Prepend volume bootstrap so chown/mkdir happen before agent bootstrap (see locals.workspace_volume_bootstrap).
+  # Our image sets CMD, so use command here and prepend the volume bootstrap.
   command = ["sh", "-c", join("", [local.workspace_volume_bootstrap, coder_agent.main.init_script])]
   env = [
     "CODER_AGENT_TOKEN=${coder_agent.main.token}"
@@ -139,9 +150,7 @@ resource "docker_container" "workspace" {
   must_run = true
 }
 
-# ------------------------------------------------------------------------------
-# Coder agent: runs inside the container, starts OpenCode in background.
-# ------------------------------------------------------------------------------
+# Coder agent: runs inside the container and starts OpenCode in the background.
 
 resource "coder_agent" "main" {
   arch = data.coder_provisioner.me.arch
@@ -150,7 +159,7 @@ resource "coder_agent" "main" {
   startup_script = <<-EOT
     set -e
     export HOME=/home/coder
-    # /tmp always writable — if $HOME is root-owned, .coder-debug cannot be created; still get evidence here.
+    # /tmp stays writable even if $HOME is still broken; use it for early diagnostics.
     TMPLOG=/tmp/coder-opencode-startup.log
     DBG=/home/coder/.coder-debug
     set +e
@@ -172,44 +181,192 @@ resource "coder_agent" "main" {
       cp -f "$TMPLOG" "$DBG/startup.log" 2>/dev/null || cat "$TMPLOG" >>"$DBG/startup.log" 2>/dev/null || true
     fi
 
-    # Ensure workspace dir exists even if .init_done was set without it (idempotent).
+    # Keep workspace creation idempotent even if `.init_done` already exists.
     if ! mkdir -p "$HOME/workspace" 2>>"$TMPLOG"; then
       echo "FATAL: mkdir -p $HOME/workspace failed — read $TMPLOG and docs/DEBUG_WORKSPACE_VOLUME.md" | tee -a "$TMPLOG" >&2
       exit 1
     fi
 
-    # Prepare home with defaults on first start (volume was empty).
+    # Seed the home volume from `/etc/skel` only on first start.
     if [ ! -f "$HOME/.init_done" ]; then
       cp -rT /etc/skel "$HOME" 2>/dev/null || true
       touch "$HOME/.init_done"
     fi
 
-    # Bind loopback only (Coder app proxies to localhost). Redirect output so the startup script can exit cleanly
-    # without Coder thinking the background child still owns stdout/stderr.
+    WORKSPACE_DIR="$HOME/workspace"
     OPENCODE_DIR="$HOME/.opencode"
     OPENCODE_LOG="$OPENCODE_DIR/server.log"
-    mkdir -p "$OPENCODE_DIR"
+    PROFILE_ROOT="$HOME/.opencode-profile"
+    PROFILE_RELEASES="$PROFILE_ROOT/releases"
+    PROFILE_CURRENT="$PROFILE_ROOT/current"
+    WORKSPACE_CONFIG_LINK="$WORKSPACE_DIR/.opencode"
+    mkdir -p "$OPENCODE_DIR" "$PROFILE_RELEASES"
     : > "$OPENCODE_LOG"
+
+    log_note() {
+      echo "$1" | tee -a "$TMPLOG" "$OPENCODE_LOG" >/dev/null
+    }
+
+    is_managed_workspace_config() {
+      [ -L "$WORKSPACE_CONFIG_LINK" ] || return 1
+      _target=$(readlink -f "$WORKSPACE_CONFIG_LINK" 2>/dev/null || true)
+      case "$_target" in
+        "$PROFILE_ROOT"/*) return 0 ;;
+        *) return 1 ;;
+      esac
+    }
+
+    normalize_opencode_source() {
+      OPENCODE_SOURCE_REPO=$${OPENCODE_CONFIG_URL%/}
+      OPENCODE_SOURCE_REF=$OPENCODE_CONFIG_REF
+      OPENCODE_SOURCE_SUBDIR=$OPENCODE_CONFIG_SUBDIR
+
+      case "$OPENCODE_SOURCE_REPO" in
+        https://github.com/*/tree/*)
+          _rest=$${OPENCODE_SOURCE_REPO#https://github.com/}
+          _owner=$${_rest%%/*}
+          _rest=$${_rest#*/}
+          _repo=$${_rest%%/*}
+          _rest=$${_rest#*/}
+          _rest=$${_rest#tree/}
+          _parsed_ref=$${_rest%%/*}
+          if [ "$_rest" = "$_parsed_ref" ]; then
+            _parsed_subdir=""
+          else
+            _parsed_subdir=$${_rest#*/}
+          fi
+          OPENCODE_SOURCE_REPO="https://github.com/$${_owner}/$${_repo}.git"
+          [ -n "$OPENCODE_SOURCE_REF" ] || OPENCODE_SOURCE_REF=$_parsed_ref
+          if [ -z "$OPENCODE_SOURCE_SUBDIR" ] && [ -n "$_parsed_subdir" ]; then
+            OPENCODE_SOURCE_SUBDIR=$_parsed_subdir
+          fi
+          ;;
+        https://github.com/*)
+          case "$OPENCODE_SOURCE_REPO" in
+            *.git) ;;
+            *) OPENCODE_SOURCE_REPO="$${OPENCODE_SOURCE_REPO}.git" ;;
+          esac
+          ;;
+      esac
+    }
+
+    clone_opencode_repo() {
+      if [ -n "$OPENCODE_SOURCE_REF" ]; then
+        if GIT_TERMINAL_PROMPT=0 git -c protocol.file.allow=never clone --depth 1 --branch "$OPENCODE_SOURCE_REF" --single-branch "$OPENCODE_SOURCE_REPO" "$STAGED_DIR/repo" >>"$OPENCODE_LOG" 2>&1; then
+          return 0
+        fi
+        rm -rf "$STAGED_DIR/repo"
+        GIT_TERMINAL_PROMPT=0 git -c protocol.file.allow=never clone --depth 1 "$OPENCODE_SOURCE_REPO" "$STAGED_DIR/repo" >>"$OPENCODE_LOG" 2>&1 || return 1
+        GIT_TERMINAL_PROMPT=0 git -c protocol.file.allow=never -C "$STAGED_DIR/repo" fetch --depth 1 origin "$OPENCODE_SOURCE_REF" >>"$OPENCODE_LOG" 2>&1 || return 1
+        git -C "$STAGED_DIR/repo" checkout --detach FETCH_HEAD >>"$OPENCODE_LOG" 2>&1 || return 1
+        return 0
+      fi
+
+      GIT_TERMINAL_PROMPT=0 git -c protocol.file.allow=never clone --depth 1 "$OPENCODE_SOURCE_REPO" "$STAGED_DIR/repo" >>"$OPENCODE_LOG" 2>&1
+    }
+
+    ensure_opencode_profile() {
+      normalize_opencode_source
+
+      PROFILE_HASH=$(printf '%s\n%s\n%s\n' "$OPENCODE_SOURCE_REPO" "$OPENCODE_SOURCE_REF" "$OPENCODE_SOURCE_SUBDIR" | sha256sum | cut -d' ' -f1)
+      PROFILE_DIR="$PROFILE_RELEASES/$PROFILE_HASH"
+
+      if [ ! -d "$PROFILE_DIR" ]; then
+        STAGED_DIR=$(mktemp -d "$PROFILE_RELEASES/.staging.XXXXXX")
+        log_note "Provisioning OpenCode config from $OPENCODE_SOURCE_REPO"
+
+        if ! clone_opencode_repo; then
+          rm -rf "$STAGED_DIR"
+          log_note "FATAL: could not fetch OpenCode config from $OPENCODE_SOURCE_REPO"
+          exit 1
+        fi
+
+        if [ -n "$OPENCODE_SOURCE_SUBDIR" ]; then
+          SELECTED_PATH="$STAGED_DIR/repo/$OPENCODE_SOURCE_SUBDIR"
+        elif [ -d "$STAGED_DIR/repo/.opencode" ]; then
+          SELECTED_PATH="$STAGED_DIR/repo/.opencode"
+        else
+          SELECTED_PATH="$STAGED_DIR/repo"
+        fi
+
+        if [ ! -d "$SELECTED_PATH" ]; then
+          rm -rf "$STAGED_DIR"
+          log_note "FATAL: OpenCode config path does not exist inside the fetched repo"
+          exit 1
+        fi
+
+        SELECTED_REAL=$(readlink -f "$SELECTED_PATH" 2>/dev/null || true)
+        case "$SELECTED_REAL" in
+          "$STAGED_DIR"/*) ;;
+          *)
+            rm -rf "$STAGED_DIR"
+            log_note "FATAL: resolved OpenCode config path escaped the fetched repo"
+            exit 1
+            ;;
+        esac
+
+        SELECTED_REL=$${SELECTED_PATH#"$STAGED_DIR"/}
+        ln -s "$SELECTED_REL" "$STAGED_DIR/selected"
+
+        cat > "$STAGED_DIR/manifest" <<EOF
+source_url=$OPENCODE_CONFIG_URL
+source_repo=$OPENCODE_SOURCE_REPO
+source_ref=$OPENCODE_SOURCE_REF
+source_subdir=$OPENCODE_SOURCE_SUBDIR
+resolved_commit=$(git -C "$STAGED_DIR/repo" rev-parse HEAD 2>/dev/null || echo unknown)
+EOF
+
+        mv "$STAGED_DIR" "$PROFILE_DIR"
+      fi
+
+      ln -sfn "$PROFILE_DIR/selected" "$PROFILE_CURRENT"
+
+      if [ -e "$WORKSPACE_CONFIG_LINK" ] && [ ! -L "$WORKSPACE_CONFIG_LINK" ]; then
+        log_note "WARNING: $WORKSPACE_CONFIG_LINK already exists and is not a symlink; leaving it unchanged"
+        return 0
+      fi
+
+      ln -sfn "$PROFILE_CURRENT" "$WORKSPACE_CONFIG_LINK"
+    }
+
+    if [ -n "$OPENCODE_CONFIG_URL" ]; then
+      ensure_opencode_profile
+    elif is_managed_workspace_config; then
+      log_note "Removing managed workspace .opencode link because no config URL is set"
+      rm -f "$WORKSPACE_CONFIG_LINK"
+    fi
+
+    # Start OpenCode from the user's workspace, not filesystem root.
+    cd "$WORKSPACE_DIR"
     opencode web --hostname 127.0.0.1 --port 4096 >>"$OPENCODE_LOG" 2>&1 </dev/null &
     echo $! > "$OPENCODE_DIR/server.pid"
 
-    # Wait for OpenCode to be ready so the Coder app healthcheck does not flake.
+    # Wait for OpenCode before reporting the agent ready.
+    OPENCODE_READY=0
     for i in $(seq 1 60); do
       if curl -sf -o /dev/null http://127.0.0.1:4096/doc 2>/dev/null; then
+        OPENCODE_READY=1
         break
       fi
       sleep 1
     done
 
-    # Agent is ready.
+    if [ "$OPENCODE_READY" != "1" ]; then
+      echo "FATAL: OpenCode did not become ready on http://127.0.0.1:4096/doc" | tee -a "$TMPLOG" "$OPENCODE_LOG" >&2
+      exit 1
+    fi
+
   EOT
 
   env = {
-    GIT_AUTHOR_NAME     = coalesce(data.coder_workspace_owner.me.full_name, data.coder_workspace_owner.me.name)
-    GIT_AUTHOR_EMAIL    = data.coder_workspace_owner.me.email
-    GIT_COMMITTER_NAME  = coalesce(data.coder_workspace_owner.me.full_name, data.coder_workspace_owner.me.name)
-    GIT_COMMITTER_EMAIL = data.coder_workspace_owner.me.email
-    HOME                = "/home/coder"
+    GIT_AUTHOR_NAME        = coalesce(data.coder_workspace_owner.me.full_name, data.coder_workspace_owner.me.name)
+    GIT_AUTHOR_EMAIL       = data.coder_workspace_owner.me.email
+    GIT_COMMITTER_NAME     = coalesce(data.coder_workspace_owner.me.full_name, data.coder_workspace_owner.me.name)
+    GIT_COMMITTER_EMAIL    = data.coder_workspace_owner.me.email
+    HOME                   = "/home/coder"
+    OPENCODE_CONFIG_REF    = data.coder_parameter.opencode_config_ref.value
+    OPENCODE_CONFIG_SUBDIR = data.coder_parameter.opencode_config_subdir.value
+    OPENCODE_CONFIG_URL    = data.coder_parameter.opencode_config_url.value
   }
 
   metadata {
@@ -237,9 +394,7 @@ resource "coder_agent" "main" {
   }
 }
 
-# ------------------------------------------------------------------------------
-# OpenCode as workspace app: exposes the web UI on port 4096.
-# ------------------------------------------------------------------------------
+# OpenCode workspace app.
 
 resource "coder_app" "opencode" {
   agent_id     = coder_agent.main.id
@@ -247,13 +402,10 @@ resource "coder_app" "opencode" {
   display_name = "OpenCode"
   url          = "http://localhost:4096/"
   icon         = "/icon/code.svg"
-  # Path-based apps break OpenCode’s SPA: the browser requests /assets/* from the Coder origin root (404 + wrong MIME).
-  # Subdomain mode serves the app at the root of a dedicated host — requires CODER_WILDCARD_ACCESS_URL + DNS *.domain.
-  # https://coder.com/docs/admin/networking/wildcard-access-url
+  # OpenCode expects to run at the host root, so expose it as a subdomain app.
   subdomain = true
 
   healthcheck {
-    # OpenCode web serves OpenAPI spec at /doc; 2xx indicates server is up.
     url       = "http://localhost:4096/doc"
     interval  = 10
     threshold = 15
