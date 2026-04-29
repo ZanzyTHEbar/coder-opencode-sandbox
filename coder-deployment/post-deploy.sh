@@ -216,10 +216,30 @@ if [ -z "${CODER_TOKEN:-}" ]; then
   exit 0
 fi
 
-if ! command -v coder >/dev/null 2>&1; then
-  echo "post-deploy: FATAL: coder CLI not found in PATH — post-deploy must run in the **coder** service container, not database." >&2
+find_coder_cli() {
+  if command -v coder >/dev/null 2>&1; then
+    command -v coder
+    return 0
+  fi
+
+  for _candidate in /opt/coder /opt/coder/coder /usr/local/bin/coder /usr/bin/coder; do
+    if [ -f "$_candidate" ] && [ -x "$_candidate" ]; then
+      printf '%s\n' "$_candidate"
+      return 0
+    fi
+  done
+
+  echo "post-deploy: FATAL: coder CLI not found. Checked PATH plus /opt/coder, /opt/coder/coder, /usr/local/bin/coder, and /usr/bin/coder." >&2
+  echo "post-deploy: FATAL: post-deploy must run in the coder service container, not database." >&2
   exit 1
-fi
+}
+
+CODER_BIN=$(find_coder_cli)
+case "$CODER_BIN" in
+  /opt/coder) PATH="/opt:${PATH}"; export PATH ;;
+  /opt/coder/coder) PATH="/opt/coder:${PATH}"; export PATH ;;
+esac
+echo "post-deploy: using coder CLI at ${CODER_BIN}" >&2
 
 resolve_template_dir
 
@@ -252,7 +272,7 @@ max="${POST_DEPLOY_PUSH_MAX_ATTEMPTS:-24}"
 i=0
 while [ "$i" -lt "$max" ]; do
   echo "post-deploy: templates push attempt $((i + 1))/${max}..." >&2
-  if coder templates push opencode-sandbox -d "$TEMPLATE_DIR" --variable "sandbox_image=${SANDBOX_IMAGE}" -y; then
+  if "$CODER_BIN" templates push opencode-sandbox -d "$TEMPLATE_DIR" --variable "sandbox_image=${SANDBOX_IMAGE}" -y; then
     echo "Template opencode-sandbox pushed successfully."
     if [ -n "${FETCH_TMPDIR:-}" ]; then
       rm -rf "$FETCH_TMPDIR"

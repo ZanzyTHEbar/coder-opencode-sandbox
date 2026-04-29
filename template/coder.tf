@@ -55,6 +55,9 @@ resource "coder_app" "opencode" {
   # OpenCode expects to run at the host root, so expose it as a subdomain app.
   subdomain = true
 
+  # Set to public only when public HTTPS `opencode attach` is required.
+  share = data.coder_parameter.opencode_app_share.value
+
   healthcheck {
     url       = "http://localhost:4096/doc"
     interval  = 10

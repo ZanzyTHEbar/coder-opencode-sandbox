@@ -2,12 +2,11 @@
 # The Coder agent is started at runtime via the template's init_script (not installed in image).
 # User: coder, HOME: /home/coder (mounted persistent volume in template).
 
-ARG OPENCODE_VERSION=1.2.27
+ARG OPENCODE_VERSION=1.14.29
 FROM ubuntu:24.04
-ARG OPENCODE_VERSION=1.2.27
+ARG OPENCODE_VERSION=1.14.29
 
 ENV DEBIAN_FRONTEND=noninteractive
-ENV HOME=/home/coder
 
 # Base: curl/wget for agent bootstrap, git, and minimal dev tools.
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -20,7 +19,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # OpenCode: install from GitHub release (opencode-linux-x64.tar.gz or arm64).
 RUN ARCH=$(dpkg --print-architecture) && \
-    case "$ARCH" in amd64) OC_ARCH="x64";; arm64) OC_ARCH="arm64";; *) OC_ARCH="x64";; esac && \
+    case "$ARCH" in amd64) OC_ARCH="x64";; arm64) OC_ARCH="arm64";; *) echo "Unsupported architecture: $ARCH" >&2; exit 1;; esac && \
     curl -fsSL "https://github.com/anomalyco/opencode/releases/download/v${OPENCODE_VERSION}/opencode-linux-${OC_ARCH}.tar.gz" -o /tmp/oc.tgz && \
     tar -xzf /tmp/oc.tgz -C /tmp && \
     OC_BIN=$(find /tmp -maxdepth 3 -type f -name "opencode" 2>/dev/null | head -1) && \
@@ -28,12 +27,15 @@ RUN ARCH=$(dpkg --print-architecture) && \
     rm -rf /tmp/oc.tgz /tmp/opencode*
 
 ENV PATH="/usr/local/bin:${PATH}"
-RUN opencode --version || true
+RUN opencode --version
 
 # User coder: match Coder's default workspace user, and add to sudoers group.
 RUN useradd -m -s /bin/bash -d /home/coder -G sudo coder && \
     echo "coder ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers.d/coder && \
-    chmod 0440 /etc/sudoers.d/coder
+    chmod 0440 /etc/sudoers.d/coder && \
+    chown -R coder:coder /home/coder
+
+ENV HOME=/home/coder
 
 # Skeleton for first-time volume mount (startup_script copies to $HOME if .init_done missing).
 RUN mkdir -p /etc/skel/workspace && \

@@ -61,3 +61,36 @@ data "coder_parameter" "linux_dotfiles_install_command" {
   mutable      = true
   order        = 60
 }
+
+data "coder_parameter" "opencode_app_share" {
+  name         = "opencode_app_share"
+  display_name = "OpenCode app sharing"
+  description  = "Controls who can reach the OpenCode web app. Keep Owner unless you need local `opencode attach` against the public HTTPS app URL. Public exposes OpenCode to anyone with the app URL while the workspace is running."
+  type         = "string"
+  default      = "owner"
+  mutable      = true
+  order        = 70
+
+  option {
+    name        = "Owner only"
+    description = "Safe default. Use Coder auth, Coder terminal, SSH, or port forwarding."
+    value       = "owner"
+  }
+
+  option {
+    name        = "Authenticated users"
+    description = "Allow any authenticated Coder user to open the app. Local CLI attach still usually needs port forwarding."
+    value       = "authenticated"
+  }
+
+  option {
+    name        = "Public URL attach"
+    description = "Allow unauthenticated public HTTPS access so `opencode attach https://<app-url>` works from local machines."
+    value       = "public"
+  }
+
+  validation {
+    regex = "^(owner|authenticated|public)$"
+    error = "OpenCode app sharing must be owner, authenticated, or public."
+  }
+}

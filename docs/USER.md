@@ -7,13 +7,57 @@
 
 ## Create and use your workspace
 
-1. **Create a workspace** from the **OpenCode sandbox** template (e.g. name it `opencode` or `main`). One workspace per user is enough; you can reuse it.
+1. **Create a workspace** from the **OpenCode sandbox** template (e.g. name it `opencode` or `main`). Use one long-lived workspace for many repos unless you intentionally need isolation.
 2. Optional: set **OpenCode config URL** to a Git URL or GitHub repo/tree/blob URL that contains your OpenCode config. You can also set **OpenCode config ref** and **OpenCode config subdirectory** if needed.
 3. Optional: set **Workspace repo URLs** to a comma-separated list of repos to clone into `~/workspace`, and/or set **Linux dotfiles URL** plus **Linux dotfiles install command** if you want to bootstrap the Linux environment itself.
-4. **Start** the workspace. The first time may take a minute while the container, volume, requested OpenCode profile, workspace repos, and any dotfiles bootstrap are created.
-5. In the workspace dashboard you’ll see:
-   - **OpenCode** — opens the OpenCode web UI (AI-assisted coding, sessions, projects).
-   - **Terminal** — shell in the same environment (clone repos, run commands, install tools).
+4. Optional: set **OpenCode app sharing** to **Public URL attach** only if you need `opencode attach https://<app-url>` from a local machine without Coder browser cookies. Keep **Owner only** for normal browser, terminal, SSH, and port-forward workflows.
+5. **Start** the workspace. The first time may take a minute while the container, volume, requested OpenCode profile, workspace repos, and any dotfiles bootstrap are created.
+6. In the workspace dashboard you’ll see:
+    - **OpenCode** — opens the OpenCode web UI (AI-assisted coding, sessions, projects).
+    - **Terminal** — shell in the same environment (clone repos, run commands, install tools).
+
+## Standard workflow
+
+1. Keep repos under `~/workspace`. A single workspace can contain many repos and scratch directories.
+2. Open **OpenCode** from the Coder workspace page for browser work.
+3. Open **Terminal** from the workspace page when you need a shell in the same persistent environment.
+4. From a local machine, run `coder ssh <workspace>` for direct terminal access after logging in with the Coder CLI.
+5. Use **Stop** when finished for the day. Do not **Delete** unless you are ready to remove the persistent home volume.
+
+## Attach the OpenCode TUI
+
+OpenCode runs one backend in the workspace on `127.0.0.1:4096`. Browser UI and TUI attach clients connect to that same backend, so sessions and state are shared.
+
+### Inside the workspace
+
+Use the Coder terminal or SSH into the workspace, then run:
+
+```bash
+opencode attach http://127.0.0.1:4096
+```
+
+### From a local machine with port forwarding
+
+Forward the OpenCode port through Coder SSH, then attach locally:
+
+```bash
+coder port-forward <workspace> --tcp 4096:4096
+opencode attach http://127.0.0.1:4096
+```
+
+If port `4096` is busy locally, forward to another local port and attach to that port instead.
+
+### From a public workspace app URL
+
+This requires **OpenCode app sharing** set to **Public URL attach**. That setting exposes the OpenCode app to anyone who has the URL while the workspace is running. Prefer `coder port-forward` unless public HTTPS attach is explicitly needed.
+
+Open the **OpenCode** app once from the Coder workspace page and copy the app URL. Then run:
+
+```bash
+opencode attach https://<opencode-app-url>
+```
+
+Treat the copied URL as a workspace access secret.
 
 ## Your data
 
