@@ -43,8 +43,17 @@ resource "docker_container" "workspace" {
     }
   }
 
-  # Our image sets CMD, so use command here and prepend the volume bootstrap.
-  command = ["sh", "-c", join("", [local.workspace_volume_bootstrap, coder_agent.main.init_script])]
+  # Bootstrap the mounted home volume as root, then run the Coder agent as the
+  # workspace user so SSH, terminal, and OpenCode state are owned by coder.
+  command = ["sh", "-c", <<-EOT
+${local.workspace_volume_bootstrap}
+AGENT_INIT=/tmp/coder-agent-init.sh
+printf '%s' '${base64encode(coder_agent.main.init_script)}' | base64 -d > "$AGENT_INIT"
+chown coder:coder "$AGENT_INIT"
+chmod 700 "$AGENT_INIT"
+exec su -m coder -s /bin/sh -c "$AGENT_INIT"
+EOT
+  ]
   env = [
     "CODER_AGENT_TOKEN=${coder_agent.main.token}",
   ]
