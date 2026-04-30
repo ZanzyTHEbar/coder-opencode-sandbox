@@ -500,13 +500,15 @@ echo $! > "$OPENCODE_DIR/server.pid"
 OPENCODE_READY=0
 for i in $(seq 1 60); do
   if [ -n "$OPENCODE_SERVER_PASSWORD" ]; then
-    curl -sf -u "opencode:$OPENCODE_SERVER_PASSWORD" -o /dev/null http://127.0.0.1:4096/doc 2>/dev/null
+    if curl -sf -u "opencode:$OPENCODE_SERVER_PASSWORD" -o /dev/null http://127.0.0.1:4096/doc 2>/dev/null; then
+      OPENCODE_READY=1
+      break
+    fi
   else
-    curl -sf -o /dev/null http://127.0.0.1:4096/doc 2>/dev/null
-  fi
-  if [ "$?" -eq 0 ]; then
-    OPENCODE_READY=1
-    break
+    if curl -sf -o /dev/null http://127.0.0.1:4096/doc 2>/dev/null; then
+      OPENCODE_READY=1
+      break
+    fi
   fi
   sleep 1
 done
