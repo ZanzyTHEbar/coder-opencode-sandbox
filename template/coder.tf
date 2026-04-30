@@ -14,6 +14,7 @@ resource "coder_agent" "main" {
     OPENCODE_CONFIG_URL            = data.coder_parameter.opencode_config_url.value
     OPENCODE_CONFIG_REF            = data.coder_parameter.opencode_config_ref.value
     OPENCODE_CONFIG_SUBDIR         = data.coder_parameter.opencode_config_subdir.value
+    OPENCODE_APP_SHARE             = data.coder_parameter.opencode_app_share.value
     WORKSPACE_REPO_URLS            = data.coder_parameter.workspace_repo_urls.value
     LINUX_DOTFILES_URL             = data.coder_parameter.linux_dotfiles_url.value
     LINUX_DOTFILES_INSTALL_COMMAND = data.coder_parameter.linux_dotfiles_install_command.value
@@ -55,7 +56,7 @@ resource "coder_app" "opencode" {
   # OpenCode expects to run at the host root, so expose it as a subdomain app.
   subdomain = true
 
-  # Set to public only when public HTTPS `opencode attach` is required.
+  # Public mode is only for password-protected HTTPS `opencode attach`.
   share = data.coder_parameter.opencode_app_share.value
 
   healthcheck {

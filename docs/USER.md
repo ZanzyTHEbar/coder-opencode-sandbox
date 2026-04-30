@@ -10,7 +10,7 @@
 1. **Create a workspace** from the **OpenCode sandbox** template (e.g. name it `opencode` or `main`). Use one long-lived workspace for many repos unless you intentionally need isolation.
 2. Optional: set **OpenCode config URL** to a Git URL or GitHub repo/tree/blob URL that contains your OpenCode config. You can also set **OpenCode config ref** and **OpenCode config subdirectory** if needed.
 3. Optional: set **Workspace repo URLs** to a comma-separated list of repos to clone into `~/workspace`, and/or set **Linux dotfiles URL** plus **Linux dotfiles install command** if you want to bootstrap the Linux environment itself.
-4. Optional: set **OpenCode app sharing** to **Public URL attach** only if you need `opencode attach https://<app-url>` from a local machine without Coder browser cookies. Keep **Owner only** for normal browser, terminal, SSH, and port-forward workflows.
+4. Optional: set **OpenCode app sharing** to **Public URL attach** only if you need `opencode attach https://<app-url>` from a local machine without Coder browser cookies. This mode is protected by a generated OpenCode server password. Keep **Owner only** for normal browser, terminal, SSH, and port-forward workflows.
 5. **Start** the workspace. The first time may take a minute while the container, volume, requested OpenCode profile, workspace repos, and any dotfiles bootstrap are created.
 6. In the workspace dashboard you’ll see:
     - **OpenCode** — opens the OpenCode web UI (AI-assisted coding, sessions, projects).
@@ -49,15 +49,16 @@ If port `4096` is busy locally, forward to another local port and attach to that
 
 ### From a public workspace app URL
 
-This requires **OpenCode app sharing** set to **Public URL attach**. That setting exposes the OpenCode app to anyone who has the URL while the workspace is running. Prefer `coder port-forward` unless public HTTPS attach is explicitly needed.
+This requires **OpenCode app sharing** set to **Public URL attach**. That setting opens public HTTPS routing, but OpenCode requires the generated server password before exposing sessions. Prefer `coder port-forward` unless public HTTPS attach is explicitly needed.
 
-Open the **OpenCode** app once from the Coder workspace page and copy the app URL. Then run:
+Read the generated password from inside the workspace, open the **OpenCode** app once from the Coder workspace page, and copy the app URL. Browser password prompts use username `opencode`. Then run:
 
 ```bash
-opencode attach https://<opencode-app-url>
+coder ssh <workspace> -- cat /home/coder/.opencode/server-password
+opencode attach --password '<server-password>' https://<opencode-app-url>
 ```
 
-Treat the copied URL as a workspace access secret.
+Treat the copied URL and server password as workspace access secrets.
 
 ## Your data
 

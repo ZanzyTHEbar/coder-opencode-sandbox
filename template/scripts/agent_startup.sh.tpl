@@ -37,6 +37,7 @@ fi
 WORKSPACE_DIR="$HOME/workspace"
 OPENCODE_DIR="$HOME/.opencode"
 OPENCODE_LOG="$OPENCODE_DIR/server.log"
+OPENCODE_SERVER_PASSWORD_FILE="$OPENCODE_DIR/server-password"
 OPENCODE_CONFIG_PARENT="$HOME/.config"
 OPENCODE_CONFIG_LINK="$OPENCODE_CONFIG_PARENT/opencode"
 PROFILE_ROOT="$HOME/.opencode-profile"
@@ -54,6 +55,28 @@ log_note() {
 
 log_note_err() {
   echo "$1" | tee -a "$TMPLOG" "$OPENCODE_LOG" >&2
+}
+
+ensure_opencode_server_password() {
+  if [ "$OPENCODE_APP_SHARE" != "public" ]; then
+    unset OPENCODE_SERVER_PASSWORD
+    if [ -s "$OPENCODE_SERVER_PASSWORD_FILE" ]; then
+      log_note "OpenCode server password file exists but is inactive because app sharing is not public."
+    fi
+    return 0
+  fi
+
+  if [ ! -s "$OPENCODE_SERVER_PASSWORD_FILE" ]; then
+    _old_umask=$(umask)
+    umask 077
+    od -An -N32 -tx1 /dev/urandom | tr -d ' \n' > "$OPENCODE_SERVER_PASSWORD_FILE"
+    umask "$_old_umask"
+  fi
+
+  chmod 600 "$OPENCODE_SERVER_PASSWORD_FILE"
+  OPENCODE_SERVER_PASSWORD=$(cat "$OPENCODE_SERVER_PASSWORD_FILE")
+  export OPENCODE_SERVER_PASSWORD
+  log_note "OpenCode public app password enabled; read $OPENCODE_SERVER_PASSWORD_FILE inside the workspace for HTTPS attach."
 }
 
 is_managed_opencode_config() {
@@ -466,6 +489,8 @@ elif [ -n "$LINUX_DOTFILES_INSTALL_COMMAND" ]; then
   log_note "WARNING: Linux dotfiles install command is set but Linux dotfiles URL is empty; skipping apply step"
 fi
 
+ensure_opencode_server_password
+
 # Start OpenCode from the user's workspace, not filesystem root.
 cd "$WORKSPACE_DIR"
 opencode web --hostname 127.0.0.1 --port 4096 >>"$OPENCODE_LOG" 2>&1 </dev/null &
@@ -474,7 +499,12 @@ echo $! > "$OPENCODE_DIR/server.pid"
 # Wait for OpenCode before reporting the agent ready.
 OPENCODE_READY=0
 for i in $(seq 1 60); do
-  if curl -sf -o /dev/null http://127.0.0.1:4096/doc 2>/dev/null; then
+  if [ -n "$OPENCODE_SERVER_PASSWORD" ]; then
+    curl -sf -u "opencode:$OPENCODE_SERVER_PASSWORD" -o /dev/null http://127.0.0.1:4096/doc 2>/dev/null
+  else
+    curl -sf -o /dev/null http://127.0.0.1:4096/doc 2>/dev/null
+  fi
+  if [ "$?" -eq 0 ]; then
     OPENCODE_READY=1
     break
   fi

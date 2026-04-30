@@ -65,7 +65,7 @@ data "coder_parameter" "linux_dotfiles_install_command" {
 data "coder_parameter" "opencode_app_share" {
   name         = "opencode_app_share"
   display_name = "OpenCode app sharing"
-  description  = "Controls who can reach the OpenCode web app. Keep Owner unless you need local `opencode attach` against the public HTTPS app URL. Public exposes OpenCode to anyone with the app URL while the workspace is running."
+  description  = "Controls who can reach the OpenCode web app. Keep Owner unless you need local `opencode attach` against the public HTTPS app URL. Public URL attach requires the generated OpenCode server password."
   type         = "string"
   default      = "owner"
   mutable      = true
@@ -85,7 +85,7 @@ data "coder_parameter" "opencode_app_share" {
 
   option {
     name        = "Public URL attach"
-    description = "Allow unauthenticated public HTTPS access so `opencode attach https://<app-url>` works from local machines."
+    description = "Allow public HTTPS routing for local attach, protected by the generated OpenCode server password."
     value       = "public"
   }
 
