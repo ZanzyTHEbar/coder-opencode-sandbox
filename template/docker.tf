@@ -9,7 +9,8 @@ resource "docker_volume" "home" {
 
 # Sandbox image (built from `image/`; operator sets `var.sandbox_image`).
 resource "docker_image" "sandbox" {
-  name = var.sandbox_image
+  name         = var.sandbox_image
+  keep_locally = true
 }
 
 # Workspace container: created only while the workspace is running.
