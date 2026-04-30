@@ -6,18 +6,22 @@ resource "coder_agent" "main" {
   startup_script = local.agent_startup_script
 
   env = {
-    GIT_AUTHOR_NAME                = coalesce(data.coder_workspace_owner.me.full_name, data.coder_workspace_owner.me.name)
-    GIT_AUTHOR_EMAIL               = data.coder_workspace_owner.me.email
-    GIT_COMMITTER_NAME             = coalesce(data.coder_workspace_owner.me.full_name, data.coder_workspace_owner.me.name)
-    GIT_COMMITTER_EMAIL            = data.coder_workspace_owner.me.email
-    HOME                           = "/home/coder"
-    OPENCODE_CONFIG_URL            = data.coder_parameter.opencode_config_url.value
-    OPENCODE_CONFIG_REF            = data.coder_parameter.opencode_config_ref.value
-    OPENCODE_CONFIG_SUBDIR         = data.coder_parameter.opencode_config_subdir.value
-    OPENCODE_APP_SHARE             = data.coder_parameter.opencode_app_share.value
-    WORKSPACE_REPO_URLS            = data.coder_parameter.workspace_repo_urls.value
-    LINUX_DOTFILES_URL             = data.coder_parameter.linux_dotfiles_url.value
-    LINUX_DOTFILES_INSTALL_COMMAND = data.coder_parameter.linux_dotfiles_install_command.value
+    GIT_AUTHOR_NAME                     = coalesce(data.coder_workspace_owner.me.full_name, data.coder_workspace_owner.me.name)
+    GIT_AUTHOR_EMAIL                    = data.coder_workspace_owner.me.email
+    GIT_COMMITTER_NAME                  = coalesce(data.coder_workspace_owner.me.full_name, data.coder_workspace_owner.me.name)
+    GIT_COMMITTER_EMAIL                 = data.coder_workspace_owner.me.email
+    HOME                                = "/home/coder"
+    OPENCODE_CONFIG_URL                 = data.coder_parameter.opencode_config_url.value
+    OPENCODE_CONFIG_REF                 = data.coder_parameter.opencode_config_ref.value
+    OPENCODE_CONFIG_SUBDIR              = data.coder_parameter.opencode_config_subdir.value
+    OPENCODE_APP_SHARE                  = data.coder_parameter.opencode_app_share.value
+    WORKSPACE_REPO_URLS                 = data.coder_parameter.workspace_repo_urls.value
+    LINUX_DOTFILES_URL                  = data.coder_parameter.linux_dotfiles_url.value
+    LINUX_DOTFILES_INSTALL_COMMAND      = data.coder_parameter.linux_dotfiles_install_command.value
+    WORKSPACE_BOOTSTRAP_URL             = data.coder_parameter.workspace_bootstrap_url.value
+    WORKSPACE_BOOTSTRAP_COMMAND         = data.coder_parameter.workspace_bootstrap_command.value
+    WORKSPACE_BOOTSTRAP_TIMEOUT_SECONDS = tostring(data.coder_parameter.workspace_bootstrap_timeout_seconds.value)
+    WORKSPACE_BOOTSTRAP_FAILURE_POLICY  = data.coder_parameter.workspace_bootstrap_failure_policy.value
   }
 
   metadata {

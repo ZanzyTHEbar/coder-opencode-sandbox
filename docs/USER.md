@@ -9,10 +9,11 @@
 
 1. **Create a workspace** from the **OpenCode sandbox** template (e.g. name it `opencode` or `main`). Use one long-lived workspace for many repos unless you intentionally need isolation.
 2. Optional: set **OpenCode config URL** to a Git URL or GitHub repo/tree/blob URL that contains your OpenCode config. You can also set **OpenCode config ref** and **OpenCode config subdirectory** if needed.
-3. Optional: set **Workspace repo URLs** to a comma-separated list of repos to clone into `~/workspace`, and/or set **Linux dotfiles URL** plus **Linux dotfiles install command** if you want to bootstrap the Linux environment itself.
-4. Optional: set **OpenCode app sharing** to **Public URL attach** only if you need `opencode attach https://<app-url>` from a local machine without Coder browser cookies. This mode is protected by a generated OpenCode server password. Keep **Owner only** for normal browser, terminal, SSH, and port-forward workflows.
-5. **Start** the workspace. The first time may take a minute while the container, volume, requested OpenCode profile, workspace repos, and any dotfiles bootstrap are created.
-6. In the workspace dashboard you’ll see:
+3. Optional: set **Workspace repo URLs** to a comma-separated list of repos to clone into `~/workspace`.
+4. Optional: set **Workspace bootstrap command** if you want to install tools or prepare the Linux environment before OpenCode starts. You can also set **Workspace bootstrap URL** to run that command from a Git repo or GitHub tree/blob URL.
+5. Optional: set **OpenCode app sharing** to **Public URL attach** only if you need `opencode attach https://<app-url>` from a local machine without Coder browser cookies. This mode is protected by a generated OpenCode server password. Keep **Owner only** for normal browser, terminal, SSH, and port-forward workflows.
+6. **Start** the workspace. The first time may take a minute while the container, volume, requested OpenCode profile, workspace repos, and any bootstrap are created.
+7. In the workspace dashboard you’ll see:
     - **OpenCode** — opens the OpenCode web UI (AI-assisted coding, sessions, projects).
     - **Terminal** — shell in the same environment (clone repos, run commands, install tools).
 
@@ -72,7 +73,9 @@ Treat the copied URL and server password as workspace access secrets.
 - If you set **OpenCode config URL**, the workspace creates a managed profile under `~/.opencode-profile/` and links `~/.config/opencode` to it.
 - Repo-local `.opencode` directories and `opencode.json` files remain available for project-specific overrides inside cloned repos or other workspace folders.
 - If you set **Workspace repo URLs**, each missing repo is cloned into `~/workspace/<repo-name>`. Existing files, directories, and repos are left untouched.
-- If you set **Linux dotfiles URL**, the selected dotfiles repo is cached under `~/.dotfiles-profile/`. When **Linux dotfiles install command** is set, that command reruns on every startup so it can reapply home-directory changes or install tools in the recreated container.
+- If you set **Workspace bootstrap command**, it reruns on every startup as `coder`, before OpenCode starts. Make it idempotent. By default, failures and timeouts are logged but OpenCode still starts; choose **Fail startup** only when the bootstrap is required for the workspace to be useful.
+- If you set **Workspace bootstrap URL**, the selected bootstrap repo is cached under `~/.workspace-bootstrap/`. The command runs from that selected directory with `BOOTSTRAP_DIR`, `BOOTSTRAP_REPO_DIR`, and `WORKSPACE_DIR` exported. Without a bootstrap URL, the command runs from `~/workspace`.
+- If you set **Linux dotfiles URL**, the selected dotfiles repo is cached under `~/.dotfiles-profile/`. When **Linux dotfiles install command** is set, that command reruns on every startup with the same timeout and failure policy as workspace bootstrap. This legacy path remains available for dotfiles-specific setup.
 - When you **stop** the workspace, the container is shut down but your data stays. **Start** again to get back the same environment.
 - **Deleting** the workspace removes the volume and all data. Only delete when you no longer need that sandbox.
 
@@ -81,5 +84,6 @@ Treat the copied URL and server password as workspace access secrets.
 - Use **Stop** when you’re done for the day to free resources; **Start** when you return.
 - Put your code under `~/workspace` (or any folder under `/home/coder`) so it’s persisted.
 - If you use a custom OpenCode config repo, treat `~/.config/opencode` as managed by the template unless you intentionally replace it. If you already have your own unmanaged file, directory, or symlink there, the template leaves it alone and logs a warning.
-- **Linux dotfiles install command** runs from the selected dotfiles directory with `DOTFILES_DIR`, `DOTFILES_REPO_DIR`, and `WORKSPACE_DIR` exported. Use it for commands like `./install.sh`, `make bootstrap`, or `stow bash git`.
+- **Workspace bootstrap command** is the generic setup hook. Use it for commands like `make bootstrap`, `mise install`, `sudo apt-get update && sudo apt-get install -y ripgrep`, or repo-local setup scripts.
+- **Linux dotfiles install command** runs from the selected dotfiles directory with `DOTFILES_DIR`, `DOTFILES_REPO_DIR`, and `WORKSPACE_DIR` exported. Use it only when you specifically want dotfiles-style setup such as `./install.sh` or `stow bash git`.
 - Configure LLM providers (e.g. API keys) in OpenCode’s settings; they’re stored in your home and persist across restarts.

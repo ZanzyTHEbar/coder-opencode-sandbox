@@ -46,7 +46,10 @@ PROFILE_CURRENT="$PROFILE_ROOT/current"
 DOTFILES_ROOT="$HOME/.dotfiles-profile"
 DOTFILES_RELEASES="$DOTFILES_ROOT/releases"
 DOTFILES_CURRENT="$DOTFILES_ROOT/current"
-mkdir -p "$OPENCODE_DIR" "$OPENCODE_CONFIG_PARENT" "$PROFILE_RELEASES" "$DOTFILES_RELEASES"
+BOOTSTRAP_ROOT="$HOME/.workspace-bootstrap"
+BOOTSTRAP_RELEASES="$BOOTSTRAP_ROOT/releases"
+BOOTSTRAP_CURRENT="$BOOTSTRAP_ROOT/current"
+mkdir -p "$OPENCODE_DIR" "$OPENCODE_CONFIG_PARENT" "$PROFILE_RELEASES" "$DOTFILES_RELEASES" "$BOOTSTRAP_RELEASES"
 : > "$OPENCODE_LOG"
 
 log_note() {
@@ -405,11 +408,150 @@ ensure_workspace_repos() {
   done
 }
 
+workspace_bootstrap_timeout_seconds() {
+  _timeout="$WORKSPACE_BOOTSTRAP_TIMEOUT_SECONDS"
+  case "$_timeout" in
+    ''|*[!0-9]*|0) _timeout=600 ;;
+  esac
+  printf '%s\n' "$_timeout"
+}
+
+handle_workspace_bootstrap_failure() {
+  _message="$1"
+
+  if [ "$WORKSPACE_BOOTSTRAP_FAILURE_POLICY" = "fail" ]; then
+    log_note_err "FATAL: $_message"
+    exit 1
+  fi
+
+  log_note "WARNING: $_message; continuing because workspace bootstrap failure policy is warn"
+  return 0
+}
+
+run_bounded_startup_command() {
+  _label="$1"
+  _working_dir="$2"
+  _command="$3"
+  _timeout=$(workspace_bootstrap_timeout_seconds)
+
+  if [ -z "$_working_dir" ] || [ ! -d "$_working_dir" ]; then
+    handle_workspace_bootstrap_failure "$_label working directory is not available"
+    return 0
+  fi
+
+  log_note "Running $_label from $_working_dir (timeout $${_timeout}s)"
+  set +e
+  (
+    cd "$_working_dir" || exit 1
+    timeout "$_timeout" sh -lc "$_command"
+  ) >>"$TMPLOG" 2>&1
+  _status=$?
+  set -e
+
+  if [ "$_status" -ne 0 ]; then
+    if [ "$_status" = "124" ]; then
+      handle_workspace_bootstrap_failure "$_label timed out after $${_timeout}s"
+    else
+      handle_workspace_bootstrap_failure "$_label failed with exit status $_status"
+    fi
+    return 0
+  fi
+
+  log_note "$_label completed successfully"
+}
+
+ensure_workspace_bootstrap() {
+  if [ -z "$WORKSPACE_BOOTSTRAP_COMMAND" ]; then
+    if [ -n "$WORKSPACE_BOOTSTRAP_URL" ]; then
+      log_note "NOTE: workspace bootstrap URL is set but no command was provided; skipping bootstrap"
+    fi
+    return 0
+  fi
+
+  if [ -z "$WORKSPACE_BOOTSTRAP_URL" ]; then
+    export BOOTSTRAP_DIR="$WORKSPACE_DIR"
+    export BOOTSTRAP_REPO_DIR="$WORKSPACE_DIR"
+    export WORKSPACE_DIR
+    run_bounded_startup_command "workspace bootstrap command" "$WORKSPACE_DIR" "$WORKSPACE_BOOTSTRAP_COMMAND"
+    return 0
+  fi
+
+  SOURCE_INPUT_URL="$WORKSPACE_BOOTSTRAP_URL"
+  SOURCE_INPUT_REF=""
+  SOURCE_INPUT_SUBDIR=""
+  if ! normalize_source_input; then
+    handle_workspace_bootstrap_failure "could not parse workspace bootstrap URL $WORKSPACE_BOOTSTRAP_URL"
+    return 0
+  fi
+
+  BOOTSTRAP_HASH=$(printf '%s\n%s\n%s\n' "$SOURCE_REPO" "$SOURCE_REF" "$SOURCE_SUBDIR" | sha256sum | cut -d' ' -f1)
+  _profile_dir="$BOOTSTRAP_RELEASES/$BOOTSTRAP_HASH"
+
+  if [ ! -d "$_profile_dir" ]; then
+    STAGED_DIR=$(mktemp -d "$BOOTSTRAP_RELEASES/.staging.XXXXXX")
+    log_note "Provisioning workspace bootstrap from $SOURCE_REPO"
+
+    if ! clone_source_repo_into "$STAGED_DIR/repo"; then
+      rm -rf "$STAGED_DIR"
+      handle_workspace_bootstrap_failure "could not fetch workspace bootstrap from $SOURCE_REPO"
+      return 0
+    fi
+
+    if ! resolve_selected_source_dir "$STAGED_DIR" "$SOURCE_SUBDIR" ""; then
+      rm -rf "$STAGED_DIR"
+      handle_workspace_bootstrap_failure "workspace bootstrap path does not exist inside the fetched repo"
+      return 0
+    fi
+
+    if ! ln -s "$SELECTED_REL" "$STAGED_DIR/selected"; then
+      rm -rf "$STAGED_DIR"
+      handle_workspace_bootstrap_failure "could not prepare workspace bootstrap cache"
+      return 0
+    fi
+
+    cat > "$STAGED_DIR/manifest" <<EOF
+source_url=$WORKSPACE_BOOTSTRAP_URL
+source_repo=$SOURCE_REPO
+source_ref=$SOURCE_REF
+source_subdir=$SOURCE_SUBDIR
+resolved_commit=$(git -C "$STAGED_DIR/repo" rev-parse HEAD 2>/dev/null || echo unknown)
+EOF
+
+    if ! mv "$STAGED_DIR" "$_profile_dir"; then
+      rm -rf "$STAGED_DIR"
+      handle_workspace_bootstrap_failure "could not store workspace bootstrap cache"
+      return 0
+    fi
+  fi
+
+  if ! ln -sfn "$_profile_dir/selected" "$BOOTSTRAP_CURRENT"; then
+    handle_workspace_bootstrap_failure "could not activate workspace bootstrap cache"
+    return 0
+  fi
+
+  _selected_dir=$(readlink -f "$BOOTSTRAP_CURRENT" 2>/dev/null || true)
+  _repo_dir=$(readlink -f "$_profile_dir/repo" 2>/dev/null || true)
+  [ -n "$_repo_dir" ] || _repo_dir="$_selected_dir"
+
+  if [ -z "$_selected_dir" ] || [ ! -d "$_selected_dir" ]; then
+    handle_workspace_bootstrap_failure "workspace bootstrap path is not available"
+    return 0
+  fi
+
+  export BOOTSTRAP_DIR="$_selected_dir"
+  export BOOTSTRAP_REPO_DIR="$_repo_dir"
+  export WORKSPACE_DIR
+  run_bounded_startup_command "workspace bootstrap command" "$_selected_dir" "$WORKSPACE_BOOTSTRAP_COMMAND"
+}
+
 ensure_linux_dotfiles() {
   SOURCE_INPUT_URL="$LINUX_DOTFILES_URL"
   SOURCE_INPUT_REF=""
   SOURCE_INPUT_SUBDIR=""
-  normalize_source_input || exit 1
+  if ! normalize_source_input; then
+    handle_workspace_bootstrap_failure "could not parse Linux dotfiles URL $LINUX_DOTFILES_URL"
+    return 0
+  fi
 
   DOTFILES_HASH=$(printf '%s\n%s\n%s\n' "$SOURCE_REPO" "$SOURCE_REF" "$SOURCE_SUBDIR" | sha256sum | cut -d' ' -f1)
   _profile_dir="$DOTFILES_RELEASES/$DOTFILES_HASH"
@@ -420,17 +562,21 @@ ensure_linux_dotfiles() {
 
     if ! clone_source_repo_into "$STAGED_DIR/repo"; then
       rm -rf "$STAGED_DIR"
-      log_note_err "FATAL: could not fetch Linux dotfiles from $SOURCE_REPO"
-      exit 1
+      handle_workspace_bootstrap_failure "could not fetch Linux dotfiles from $SOURCE_REPO"
+      return 0
     fi
 
     if ! resolve_selected_source_dir "$STAGED_DIR" "$SOURCE_SUBDIR" ""; then
       rm -rf "$STAGED_DIR"
-      log_note_err "FATAL: Linux dotfiles path does not exist inside the fetched repo"
-      exit 1
+      handle_workspace_bootstrap_failure "Linux dotfiles path does not exist inside the fetched repo"
+      return 0
     fi
 
-    ln -s "$SELECTED_REL" "$STAGED_DIR/selected"
+    if ! ln -s "$SELECTED_REL" "$STAGED_DIR/selected"; then
+      rm -rf "$STAGED_DIR"
+      handle_workspace_bootstrap_failure "could not prepare Linux dotfiles cache"
+      return 0
+    fi
 
     cat > "$STAGED_DIR/manifest" <<EOF
 source_url=$LINUX_DOTFILES_URL
@@ -440,10 +586,17 @@ source_subdir=$SOURCE_SUBDIR
 resolved_commit=$(git -C "$STAGED_DIR/repo" rev-parse HEAD 2>/dev/null || echo unknown)
 EOF
 
-    mv "$STAGED_DIR" "$_profile_dir"
+    if ! mv "$STAGED_DIR" "$_profile_dir"; then
+      rm -rf "$STAGED_DIR"
+      handle_workspace_bootstrap_failure "could not store Linux dotfiles cache"
+      return 0
+    fi
   fi
 
-  ln -sfn "$_profile_dir/selected" "$DOTFILES_CURRENT"
+  if ! ln -sfn "$_profile_dir/selected" "$DOTFILES_CURRENT"; then
+    handle_workspace_bootstrap_failure "could not activate Linux dotfiles cache"
+    return 0
+  fi
 
   if [ -z "$LINUX_DOTFILES_INSTALL_COMMAND" ]; then
     log_note "NOTE: Linux dotfiles URL is set but no install command was provided; skipping apply step"
@@ -455,23 +608,14 @@ EOF
   [ -n "$_repo_dir" ] || _repo_dir="$_selected_dir"
 
   if [ -z "$_selected_dir" ] || [ ! -d "$_selected_dir" ]; then
-    log_note_err "FATAL: Linux dotfiles path is not available for apply"
-    exit 1
+    handle_workspace_bootstrap_failure "Linux dotfiles path is not available for apply"
+    return 0
   fi
 
-  log_note "Applying Linux dotfiles from $_selected_dir"
-  if ! (
-    export DOTFILES_DIR="$_selected_dir"
-    export DOTFILES_REPO_DIR="$_repo_dir"
-    export WORKSPACE_DIR
-    cd "$_selected_dir" || exit 1
-    sh -lc "$LINUX_DOTFILES_INSTALL_COMMAND"
-  ) >>"$TMPLOG" 2>&1; then
-    log_note_err "FATAL: Linux dotfiles install command failed"
-    exit 1
-  fi
-
-  log_note "Linux dotfiles install command completed successfully"
+  export DOTFILES_DIR="$_selected_dir"
+  export DOTFILES_REPO_DIR="$_repo_dir"
+  export WORKSPACE_DIR
+  run_bounded_startup_command "Linux dotfiles install command" "$_selected_dir" "$LINUX_DOTFILES_INSTALL_COMMAND"
 }
 
 ensure_workspace_repos
@@ -482,6 +626,8 @@ elif is_managed_opencode_config; then
   log_note "Removing managed OpenCode config link because no config URL is set"
   rm -f "$OPENCODE_CONFIG_LINK"
 fi
+
+ensure_workspace_bootstrap
 
 if [ -n "$LINUX_DOTFILES_URL" ]; then
   ensure_linux_dotfiles
