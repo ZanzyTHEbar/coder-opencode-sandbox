@@ -64,6 +64,7 @@ The environment names intentionally match the Coder template where possible:
 - `LINUX_DOTFILES_URL`, `LINUX_DOTFILES_INSTALL_COMMAND`
 - `LINUX_DOTFILES_REF`, `LINUX_DOTFILES_SUBDIR`
 - `OPENCODE_HOSTNAME` defaults to `opencode-runtime` so full machine bootstrap can target a stable Dragonarchy host profile.
+- `OPENCODE_ATTACH_BIND`, `OPENCODE_ATTACH_PORT` expose the backend on LXC localhost only for SSH-tunneled `opencode attach`.
 - `OPENCODE_APP_SHARE`, `OPENCODE_SERVER_PASSWORD`
 - `OPENCODE_REQUIRE_PASSWORD`, `OPENCODE_CHOWN_RECURSIVE`
 - `GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`, `GIT_COMMITTER_NAME`, `GIT_COMMITTER_EMAIL`
