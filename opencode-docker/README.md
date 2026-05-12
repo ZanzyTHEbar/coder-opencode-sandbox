@@ -9,6 +9,9 @@ The first rollout target is internal-only. Add public DNS, Pangolin routing, and
 - Ubuntu 24.04 OpenCode image.
 - Non-root `coder` user with persistent `/home/coder`.
 - Bind-mounted persistent workspace at `/home/coder/workspace`.
+- Latest OpenCode release by default at image build time.
+- Zsh default shell with chezmoi available for dotfile provisioning.
+- CaskaydiaCode Mono Nerd Font installed from the CascadiaCode Nerd Font package.
 - Managed OpenCode config from Git/GitHub URLs.
 - Workspace repo cloning.
 - Generic workspace bootstrap command with timeout and `warn`/`fail` policy.
@@ -59,6 +62,7 @@ The environment names intentionally match the Coder template where possible:
 - `WORKSPACE_BOOTSTRAP_URL`, `WORKSPACE_BOOTSTRAP_COMMAND`
 - `WORKSPACE_BOOTSTRAP_TIMEOUT_SECONDS`, `WORKSPACE_BOOTSTRAP_FAILURE_POLICY`
 - `LINUX_DOTFILES_URL`, `LINUX_DOTFILES_INSTALL_COMMAND`
+- `LINUX_DOTFILES_REF`, `LINUX_DOTFILES_SUBDIR`
 - `OPENCODE_APP_SHARE`, `OPENCODE_SERVER_PASSWORD`
 - `OPENCODE_REQUIRE_PASSWORD`, `OPENCODE_CHOWN_RECURSIVE`
 - `GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`, `GIT_COMMITTER_NAME`, `GIT_COMMITTER_EMAIL`
@@ -68,6 +72,8 @@ The environment names intentionally match the Coder template where possible:
 `OPENCODE_REQUIRE_PASSWORD=true` is the Docker-only default because there is no Coder owner/authenticated proxy in front of this service. If `OPENCODE_SERVER_PASSWORD` is empty, startup generates a password and stores it at `/home/coder/.opencode/server-password`.
 
 The `coder` user and `/home/coder` path are retained for migration compatibility with the Coder sandbox; this package does not run Coder.
+
+`OPENCODE_VERSION=latest` resolves the newest upstream OpenCode release during image build. Pin a version only when a rollback or reproducibility window requires it.
 
 ## Local Smoke Test
 

@@ -514,8 +514,8 @@ EOF
 
 ensure_linux_dotfiles() {
   SOURCE_INPUT_URL="$LINUX_DOTFILES_URL"
-  SOURCE_INPUT_REF=""
-  SOURCE_INPUT_SUBDIR=""
+  SOURCE_INPUT_REF="${LINUX_DOTFILES_REF:-}"
+  SOURCE_INPUT_SUBDIR="${LINUX_DOTFILES_SUBDIR:-}"
   if ! normalize_source_input; then
     handle_workspace_bootstrap_failure "could not parse Linux dotfiles URL $LINUX_DOTFILES_URL"
     return 0

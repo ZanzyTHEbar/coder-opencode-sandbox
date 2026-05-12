@@ -4,7 +4,8 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        OPENCODE_VERSION: ${OPENCODE_VERSION:-1.14.29}
+        OPENCODE_VERSION: ${OPENCODE_VERSION:-latest}
+        NERD_FONT_VERSION: ${NERD_FONT_VERSION:-latest}
     image: ${OPENCODE_DOCKER_IMAGE:-coder-opencode-docker:local}
     restart: unless-stopped
     init: true
@@ -28,6 +29,8 @@ services:
       WORKSPACE_BOOTSTRAP_TIMEOUT_SECONDS: ${WORKSPACE_BOOTSTRAP_TIMEOUT_SECONDS:-600}
       WORKSPACE_BOOTSTRAP_FAILURE_POLICY: ${WORKSPACE_BOOTSTRAP_FAILURE_POLICY:-warn}
       LINUX_DOTFILES_URL: ${LINUX_DOTFILES_URL:-}
+      LINUX_DOTFILES_REF: ${LINUX_DOTFILES_REF:-}
+      LINUX_DOTFILES_SUBDIR: ${LINUX_DOTFILES_SUBDIR:-}
       LINUX_DOTFILES_INSTALL_COMMAND: ${LINUX_DOTFILES_INSTALL_COMMAND:-}
       OPENCODE_LOG_DIR: /var/log/opencode
       STARTUP_LOG: /var/log/opencode/startup.log
