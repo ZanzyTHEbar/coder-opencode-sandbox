@@ -1,0 +1,118 @@
+---
+- name: Prepare Docker-only OpenCode Coolify resource server
+  hosts: opencode_resource
+  become: true
+  gather_facts: true
+
+  handlers:
+    - name: restart docker
+      ansible.builtin.service:
+        name: docker
+        state: restarted
+
+  tasks:
+    - name: Require Debian target
+      ansible.builtin.assert:
+        that:
+          - ansible_facts["distribution"] == "Debian"
+          - ansible_facts["distribution_major_version"] | int == expected_debian_major_version | int
+        fail_msg: "This playbook expects the latest stable Debian LXC from the Proxmox community scripts Docker installer."
+
+    - name: Install base packages
+      ansible.builtin.apt:
+        name: "{{ required_packages }}"
+        state: present
+        update_cache: true
+
+    - name: Check Docker installed by community script
+      ansible.builtin.command: docker version --format '{{ "{{" }}.Server.Version{{ "}}" }}'
+      register: docker_version_check
+      changed_when: false
+      failed_when: false
+
+    - name: Fail if Docker is missing
+      ansible.builtin.fail:
+        msg: "Docker is not installed. Re-run or repair the Proxmox community scripts Docker LXC installer before this Ansible phase."
+      when: docker_version_check.rc != 0
+
+    - name: Check Docker Compose plugin installed by community script
+      ansible.builtin.command: docker compose version --short
+      register: docker_compose_check
+      changed_when: false
+      failed_when: false
+
+    - name: Fail if Docker Compose plugin is missing
+      ansible.builtin.fail:
+        msg: "Docker Compose plugin is not installed. Repair the community-script Docker install before Coolify registration."
+      when: docker_compose_check.rc != 0
+
+    - name: Enable Docker service
+      ansible.builtin.service:
+        name: docker
+        enabled: true
+        state: started
+
+    - name: Create OpenCode runtime group
+      ansible.builtin.group:
+        name: "{{ opencode_runtime_group }}"
+        gid: "{{ opencode_runtime_gid }}"
+        state: present
+
+    - name: Create OpenCode runtime user
+      ansible.builtin.user:
+        name: "{{ opencode_runtime_user }}"
+        uid: "{{ opencode_runtime_uid }}"
+        group: "{{ opencode_runtime_group }}"
+        shell: /usr/sbin/nologin
+        create_home: false
+        system: true
+        state: present
+
+    - name: Create OpenCode persistent directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: "{{ opencode_runtime_uid }}"
+        group: "{{ opencode_runtime_gid }}"
+        mode: "{{ '0770' if item == opencode_base_dir + '/projects' else '0750' }}"
+      loop: "{{ opencode_dirs }}"
+
+    - name: Ensure Coolify external network exists for validation and standalone testing
+      ansible.builtin.command: "docker network create {{ coolify_network_name }}"
+      register: coolify_network_create
+      changed_when: coolify_network_create.rc == 0
+      failed_when:
+        - coolify_network_create.rc != 0
+        - "'already exists' not in coolify_network_create.stderr"
+      when: create_coolify_network | default(true) | bool
+
+    - name: Configure UFW default incoming policy
+      community.general.ufw:
+        direction: incoming
+        policy: "{{ ufw_default_incoming }}"
+
+    - name: Configure UFW default outgoing policy
+      community.general.ufw:
+        direction: outgoing
+        policy: "{{ ufw_default_outgoing }}"
+
+    - name: Allow required TCP ports
+      community.general.ufw:
+        rule: allow
+        port: "{{ item }}"
+        proto: tcp
+      loop: "{{ ufw_allowed_tcp_ports }}"
+
+    - name: Enable UFW
+      community.general.ufw:
+        state: enabled
+
+    - name: Verify Docker still works after host preparation
+      ansible.builtin.command: docker version --format '{{ "{{" }}.Server.Version{{ "}}" }}'
+      changed_when: false
+
+    - name: Show next registration step
+      ansible.builtin.debug:
+        msg:
+          - "Resource host prepared. Register this host in Coolify as a Docker server/resource server."
+          - "Keep the first OpenCode deployment internal-only; do not assign a public domain yet."

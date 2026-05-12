@@ -1,0 +1,55 @@
+services:
+  opencode:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        OPENCODE_VERSION: ${OPENCODE_VERSION:-1.14.29}
+    image: ${OPENCODE_DOCKER_IMAGE:-coder-opencode-docker:local}
+    restart: unless-stopped
+    init: true
+    environment:
+      OPENCODE_APP_SHARE: ${OPENCODE_APP_SHARE:-private}
+      OPENCODE_REQUIRE_PASSWORD: ${OPENCODE_REQUIRE_PASSWORD:-true}
+      OPENCODE_SERVER_PASSWORD: ${OPENCODE_SERVER_PASSWORD:-}
+      OPENCODE_CHOWN_RECURSIVE: ${OPENCODE_CHOWN_RECURSIVE:-false}
+      OPENCODE_HOST: 0.0.0.0
+      OPENCODE_PORT: 4096
+      GIT_AUTHOR_NAME: ${GIT_AUTHOR_NAME:-}
+      GIT_AUTHOR_EMAIL: ${GIT_AUTHOR_EMAIL:-}
+      GIT_COMMITTER_NAME: ${GIT_COMMITTER_NAME:-}
+      GIT_COMMITTER_EMAIL: ${GIT_COMMITTER_EMAIL:-}
+      OPENCODE_CONFIG_URL: ${OPENCODE_CONFIG_URL:-}
+      OPENCODE_CONFIG_REF: ${OPENCODE_CONFIG_REF:-}
+      OPENCODE_CONFIG_SUBDIR: ${OPENCODE_CONFIG_SUBDIR:-}
+      WORKSPACE_REPO_URLS: ${WORKSPACE_REPO_URLS:-}
+      WORKSPACE_BOOTSTRAP_URL: ${WORKSPACE_BOOTSTRAP_URL:-}
+      WORKSPACE_BOOTSTRAP_COMMAND: ${WORKSPACE_BOOTSTRAP_COMMAND:-}
+      WORKSPACE_BOOTSTRAP_TIMEOUT_SECONDS: ${WORKSPACE_BOOTSTRAP_TIMEOUT_SECONDS:-600}
+      WORKSPACE_BOOTSTRAP_FAILURE_POLICY: ${WORKSPACE_BOOTSTRAP_FAILURE_POLICY:-warn}
+      LINUX_DOTFILES_URL: ${LINUX_DOTFILES_URL:-}
+      LINUX_DOTFILES_INSTALL_COMMAND: ${LINUX_DOTFILES_INSTALL_COMMAND:-}
+      OPENCODE_LOG_DIR: /var/log/opencode
+      STARTUP_LOG: /var/log/opencode/startup.log
+    volumes:
+      - ${OPENCODE_HOME_PATH:-/srv/opencode/home}:/home/coder
+      - ${OPENCODE_PROJECTS_PATH:-/srv/opencode/projects}:/home/coder/workspace
+      - ${OPENCODE_LOGS_PATH:-/srv/opencode/logs}:/var/log/opencode
+    expose:
+      - "4096"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "if [ -s /home/coder/.opencode/server-password ]; then p=$$(cat /home/coder/.opencode/server-password); curl -fsS --max-time 3 -u \"opencode:$$p\" http://127.0.0.1:4096/doc >/dev/null; else curl -fsS --max-time 3 http://127.0.0.1:4096/doc >/dev/null; fi",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+    networks:
+      - coolify
+
+networks:
+  coolify:
+    external: true

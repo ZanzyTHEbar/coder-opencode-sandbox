@@ -1,0 +1,14 @@
+container_id = 120
+hostname     = "opencode-runtime"
+proxmox_node = "dragonserver"
+
+# Set this after the Proxmox community scripts Docker LXC installer completes.
+ipv4_address = "192.168.0.REPLACE"
+
+# Mirror the sizing selected in the community script.
+cpu_cores   = 6
+memory_mb   = 12288
+disk_size_gb = 160
+
+community_script_url = "https://community-scripts.github.io/ProxmoxVE/scripts?id=docker"
+opencode_base_dir    = "/srv/opencode"

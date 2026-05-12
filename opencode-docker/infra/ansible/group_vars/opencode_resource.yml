@@ -1,0 +1,29 @@
+opencode_runtime_user: opencode
+opencode_runtime_group: opencode
+opencode_runtime_uid: 1800
+opencode_runtime_gid: 1800
+expected_debian_major_version: 13
+
+opencode_base_dir: /srv/opencode
+opencode_dirs:
+  - /srv/opencode/home
+  - /srv/opencode/projects
+  - /srv/opencode/logs
+  - /srv/opencode/backups
+
+coolify_network_name: coolify
+
+required_packages:
+  - ca-certificates
+  - curl
+  - gnupg
+  - lsb-release
+  - openssh-server
+  - rsync
+  - sudo
+  - ufw
+
+ufw_default_incoming: deny
+ufw_default_outgoing: allow
+ufw_allowed_tcp_ports:
+  - 22
