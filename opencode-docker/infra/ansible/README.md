@@ -35,7 +35,7 @@ Public routing needs a later, explicit firewall change once Pangolin/Coolify rou
 
 Root SSH is used for bootstrap because the community-script-created LXC starts as an infrastructure host. If a long-lived operator account is desired, add it after Docker/Coolify registration and update inventory accordingly.
 
-Coolify may create or manage its own Docker network after registration. If that happens, confirm the network name and update `opencode-docker/docker-compose.yml` if it is not `coolify`.
+Coolify may create or manage its own Docker network after registration. If that happens, confirm the network name and update `opencode-docker/docker-compose.yaml` if it is not `coolify`.
 
 ## Ownership
 

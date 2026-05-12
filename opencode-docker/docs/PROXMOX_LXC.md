@@ -29,7 +29,7 @@ High-level order:
 3. Select the OpenCode runtime sizing.
 4. Create `/srv/opencode/{home,projects,logs,backups}`.
 5. Register the LXC as a Coolify resource server.
-6. Deploy `opencode-docker/docker-compose.yml` internally.
+6. Deploy `opencode-docker/docker-compose.yaml` internally.
 7. Validate persistence and health before any public route.
 
 Terraform records the script-created LXC contract in `infra/terraform/opencode-lxc/`; Ansible prepares `/srv/opencode` and validates Docker in `infra/ansible/`.

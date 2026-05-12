@@ -1,6 +1,6 @@
 # Coolify Deployment
 
-Deploy `opencode-docker/docker-compose.yml` as a repo-backed Docker Compose app.
+Deploy `opencode-docker/docker-compose.yaml` as a repo-backed Docker Compose app.
 
 The step-by-step resource registration and internal-first deployment runbook lives in `infra/coolify/README.md`.
 
@@ -31,7 +31,7 @@ The Compose file mounts:
 
 The compose app expects the external Docker network to be named `coolify`, matching DragonServer's other Coolify deployments.
 
-If the dedicated resource server uses a different network name, update `docker-compose.yml` before deployment.
+If the dedicated resource server uses a different network name, update `docker-compose.yaml` before deployment.
 
 ## Domains
 

@@ -3,7 +3,7 @@
 This is the post-LXC sequence:
 
 1. Register the community-script-created and Ansible-prepared Debian Docker LXC as a Coolify Docker resource server.
-2. Deploy `opencode-docker/docker-compose.yml` to that resource server with no public domain.
+2. Deploy `opencode-docker/docker-compose.yaml` to that resource server with no public domain.
 3. Validate OpenCode internally.
 4. Add public routing only after Pangolin/Auth is ready.
 
@@ -26,7 +26,7 @@ Create the Coolify app/service against the new resource server and point it at t
 
 ```text
 Base directory: opencode-docker
-Compose file: docker-compose.yml
+Compose file: docker-compose.yaml
 ```
 
 Do not assign a public domain in the first deployment.
@@ -60,7 +60,7 @@ If using Coolify's API instead of the UI, the existing DragonServer control plan
   "server_uuid": "<dedicated-opencode-server-uuid>",
   "destination_uuid": "<dedicated-opencode-destination-uuid>",
   "instant_deploy": false,
-  "docker_compose_raw": "<contents of opencode-docker/docker-compose.yml>",
+  "docker_compose_raw": "<contents of opencode-docker/docker-compose.yaml>",
   "urls": [],
   "force_domain_override": false
 }

@@ -19,7 +19,7 @@ The first rollout target is internal-only. Add public DNS, Pangolin routing, and
 ## Layout
 
 - `Dockerfile`: OpenCode runtime image.
-- `docker-compose.yml`: Coolify-compatible single-service deployment.
+- `docker-compose.yaml`: Coolify-compatible single-service deployment.
 - `.env.example`: environment contract.
 - `scripts/entrypoint.sh`: root filesystem preparation, then drops to `coder`.
 - `scripts/opencode-startup.sh`: repo/config/bootstrap/dotfiles provisioning and OpenCode startup.
@@ -79,14 +79,14 @@ mkdir -p /tmp/opencode-docker/home /tmp/opencode-docker/projects /tmp/opencode-d
 OPENCODE_HOME_PATH=/tmp/opencode-docker/home \
 OPENCODE_PROJECTS_PATH=/tmp/opencode-docker/projects \
 OPENCODE_LOGS_PATH=/tmp/opencode-docker/logs \
-docker compose up --build
+docker compose -f docker-compose.yaml up --build
 ```
 
 Then check:
 
 ```sh
 p=$(docker compose exec -T opencode cat /home/coder/.opencode/server-password)
-docker compose exec opencode curl -fsS -u "opencode:$p" http://127.0.0.1:4096/doc >/dev/null
+docker compose -f docker-compose.yaml exec opencode curl -fsS -u "opencode:$p" http://127.0.0.1:4096/doc >/dev/null
 ```
 
 Do not print the generated password in shared logs. Read it from `/home/coder/.opencode/server-password` only when needed.
