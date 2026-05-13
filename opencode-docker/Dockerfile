@@ -15,14 +15,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     gosu \
     jq \
-    nodejs \
-    npm \
     openssh-client \
     rsync \
     sudo \
     unzip \
     zsh \
     && rm -rf /var/lib/apt/lists/*
+
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
+    apt-get install -y --no-install-recommends nodejs && \
+    rm -rf /var/lib/apt/lists/*
 
 RUN curl -fsSL https://bun.sh/install | BUN_INSTALL=/usr/local bash && \
     ln -sf /usr/local/bin/bun /usr/local/bin/bunx
