@@ -66,6 +66,9 @@ The environment names intentionally match the Coder template where possible:
 - `OPENCODE_HOSTNAME` defaults to `opencode-runtime` so full machine bootstrap can target a stable Dragonarchy host profile.
 - `OPENCODE_ATTACH_BIND`, `OPENCODE_ATTACH_PORT` expose the backend on LXC localhost only for SSH-tunneled `opencode attach`.
 - `OPENCODE_SERVER_CWD` defaults to `/home/coder/opencode-hub` so the server does not create root sessions from `/home/coder/workspace`, the directory containing all projects.
+- `OPENCODE_DISABLE_AUTOUPDATE` defaults to `true`; this Docker runtime updates through image rebuilds, not in-app mutation.
+- `OPENCODE_EXPERIMENTAL*` mirrors the Dragonarchy `.zshenv` OpenCode flags into the actual server process.
+- `MEMORY_BANK_ROOT` defaults to `/home/coder/.local/share/opencode/memory-bank` for the local memory-bank MCP.
 - `OPENCODE_APP_SHARE`, `OPENCODE_SERVER_PASSWORD`
 - `OPENCODE_REQUIRE_PASSWORD`, `OPENCODE_CHOWN_RECURSIVE`
 - `GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`, `GIT_COMMITTER_NAME`, `GIT_COMMITTER_EMAIL`

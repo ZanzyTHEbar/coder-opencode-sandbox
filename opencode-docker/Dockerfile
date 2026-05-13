@@ -15,12 +15,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     gosu \
     jq \
+    nodejs \
+    npm \
     openssh-client \
     rsync \
     sudo \
     unzip \
     zsh \
     && rm -rf /var/lib/apt/lists/*
+
+RUN curl -fsSL https://bun.sh/install | BUN_INSTALL=/usr/local bash && \
+    ln -sf /usr/local/bin/bun /usr/local/bin/bunx
 
 RUN ARCH=$(dpkg --print-architecture) && \
     case "$ARCH" in amd64) OC_ARCH="x64";; arm64) OC_ARCH="arm64";; *) echo "Unsupported architecture: $ARCH" >&2; exit 1;; esac && \
@@ -56,6 +61,7 @@ ENV PATH="/usr/local/bin:${PATH}" \
     OPENCODE_PORT=4096
 
 RUN opencode --version
+RUN node --version && npm --version && npx --version && bun --version
 
 RUN groupadd --gid 1800 coder && \
     useradd --uid 1800 --gid 1800 -m -s /usr/bin/zsh -d /home/coder -G sudo coder && \

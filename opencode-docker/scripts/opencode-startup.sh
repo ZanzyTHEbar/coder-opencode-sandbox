@@ -8,8 +8,10 @@ OPENCODE_HOST=${OPENCODE_HOST:-0.0.0.0}
 OPENCODE_PORT=${OPENCODE_PORT:-4096}
 OPENCODE_APP_SHARE=${OPENCODE_APP_SHARE:-private}
 OPENCODE_REQUIRE_PASSWORD=${OPENCODE_REQUIRE_PASSWORD:-true}
+MEMORY_BANK_ROOT=${MEMORY_BANK_ROOT:-$HOME/.local/share/opencode/memory-bank}
 WORKSPACE_BOOTSTRAP_FAILURE_POLICY=${WORKSPACE_BOOTSTRAP_FAILURE_POLICY:-warn}
 WORKSPACE_BOOTSTRAP_TIMEOUT_SECONDS=${WORKSPACE_BOOTSTRAP_TIMEOUT_SECONDS:-600}
+export MEMORY_BANK_ROOT
 
 LOG_DIR=${OPENCODE_LOG_DIR:-/var/log/opencode}
 TMPLOG=${STARTUP_LOG:-$LOG_DIR/startup.log}
@@ -28,7 +30,7 @@ BOOTSTRAP_ROOT="$HOME/.workspace-bootstrap"
 BOOTSTRAP_RELEASES="$BOOTSTRAP_ROOT/releases"
 BOOTSTRAP_CURRENT="$BOOTSTRAP_ROOT/current"
 
-mkdir -p "$WORKSPACE_DIR" "$OPENCODE_SERVER_CWD" "$LOG_DIR" "$OPENCODE_DIR" "$OPENCODE_CONFIG_PARENT" "$PROFILE_RELEASES" "$DOTFILES_RELEASES" "$BOOTSTRAP_RELEASES"
+mkdir -p "$WORKSPACE_DIR" "$OPENCODE_SERVER_CWD" "$MEMORY_BANK_ROOT" "$LOG_DIR" "$OPENCODE_DIR" "$OPENCODE_CONFIG_PARENT" "$PROFILE_RELEASES" "$DOTFILES_RELEASES" "$BOOTSTRAP_RELEASES"
 : > "$TMPLOG"
 : > "$OPENCODE_LOG"
 
@@ -99,6 +101,39 @@ ensure_opencode_server_password() {
   OPENCODE_SERVER_PASSWORD=$(cat "$OPENCODE_SERVER_PASSWORD_FILE")
   export OPENCODE_SERVER_PASSWORD
   log_note "OpenCode public app password enabled; read $OPENCODE_SERVER_PASSWORD_FILE inside the container for HTTPS attach."
+}
+
+ensure_opencode_hub() {
+  if [ ! -f "$OPENCODE_SERVER_CWD/README.md" ]; then
+    cat > "$OPENCODE_SERVER_CWD/README.md" <<'EOF'
+# OpenCode Runtime Hub
+
+This directory is the neutral browser landing project for the persistent OpenCode server.
+
+Use project-scoped attach commands for real work:
+
+```sh
+oca dragonserver
+oca actual-mcp --continue
+oca mealie-mcp --session <session_id>
+```
+
+Do not start project sessions from `/home/coder/workspace`; that directory only contains project folders.
+EOF
+  fi
+
+  if [ ! -d "$OPENCODE_SERVER_CWD/.git" ]; then
+    git -C "$OPENCODE_SERVER_CWD" init >/dev/null 2>&1 || return 0
+  fi
+
+  if git -C "$OPENCODE_SERVER_CWD" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    git -C "$OPENCODE_SERVER_CWD" config user.name "OpenCode Runtime" >/dev/null 2>&1 || true
+    git -C "$OPENCODE_SERVER_CWD" config user.email "opencode-runtime@localhost" >/dev/null 2>&1 || true
+    if ! git -C "$OPENCODE_SERVER_CWD" rev-parse --verify HEAD >/dev/null 2>&1; then
+      git -C "$OPENCODE_SERVER_CWD" add README.md >/dev/null 2>&1 || true
+      git -C "$OPENCODE_SERVER_CWD" commit -m "Initialize OpenCode runtime hub" >/dev/null 2>&1 || true
+    fi
+  fi
 }
 
 is_managed_opencode_config() {
@@ -596,6 +631,7 @@ elif [ -n "${LINUX_DOTFILES_INSTALL_COMMAND:-}" ]; then
 fi
 
 ensure_opencode_server_password
+ensure_opencode_hub
 
 case "$OPENCODE_SERVER_CWD" in
   /|"$HOME"|"$WORKSPACE_DIR")
