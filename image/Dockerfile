@@ -2,9 +2,9 @@
 # The Coder agent is started at runtime via the template's init_script (not installed in image).
 # User: coder, HOME: /home/coder (mounted persistent volume in template).
 
-ARG OPENCODE_VERSION=1.14.29
+ARG OPENCODE_VERSION=1.17.7
 FROM ubuntu:24.04
-ARG OPENCODE_VERSION=1.14.29
+ARG OPENCODE_VERSION=1.17.7
 
 ENV DEBIAN_FRONTEND=noninteractive
 
