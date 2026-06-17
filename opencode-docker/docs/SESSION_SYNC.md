@@ -59,6 +59,10 @@ Expected result: the first count matches the staged manifest; the second is `0`.
 
 Then open a known project under `/home/coder/workspace/<project>` and confirm history appears.
 
+Use the absolute container path when opening projects in the browser. `~/workspace/<project>` is not expanded by the web API, and trailing slashes do not match migrated `session.directory` values.
+
+If the browser opens the directory but shows only `opencode-hub` or no project sessions, verify the mounted repo ownership. Git must work as the `coder` user so OpenCode can resolve the project ID from the repo. For private migrated files, run one startup with `OPENCODE_CHOWN_RECURSIVE=true`, then turn it back off. For shared NFS bind mounts into an unprivileged LXC, keep host ownership intact and grant the container-mapped UID ACL access, then add exact `git config --global --add safe.directory <repo>` entries inside the runtime home.
+
 Message text and sidecar JSON are copied as history and are not rewritten. Old path strings may remain inside conversation content; active session/project paths are rewritten in the database.
 
 ## Ongoing Rule

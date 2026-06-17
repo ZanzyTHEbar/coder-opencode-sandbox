@@ -8,17 +8,28 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
     bash \
     ansible \
+    build-essential \
     ca-certificates \
+    cmake \
     coreutils \
     curl \
     fontconfig \
+    fzf \
+    gh \
     git \
     gosu \
     jq \
+    less \
     openssh-client \
+    pkg-config \
+    python3 \
+    ripgrep \
     rsync \
+    sqlite3 \
     sudo \
     unzip \
+    xdg-utils \
+    zoxide \
     zsh \
     && rm -rf /var/lib/apt/lists/*
 
@@ -76,8 +87,9 @@ RUN groupadd --gid 1800 coder && \
 
 COPY scripts/entrypoint.sh /usr/local/bin/opencode-docker-entrypoint
 COPY scripts/opencode-startup.sh /usr/local/bin/opencode-startup
+COPY scripts/project-discovery-server.py /usr/local/bin/opencode-project-discovery-server
 
-RUN chmod 0755 /usr/local/bin/opencode-docker-entrypoint /usr/local/bin/opencode-startup
+RUN chmod 0755 /usr/local/bin/opencode-docker-entrypoint /usr/local/bin/opencode-startup /usr/local/bin/opencode-project-discovery-server
 
 USER root
 WORKDIR /home/coder/workspace
