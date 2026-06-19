@@ -23,6 +23,14 @@ resource "coder_agent" "main" {
     interval     = 10
     timeout      = 5
   }
+
+  metadata {
+    display_name = "Git SSH Key"
+    key          = "2_git_ssh_key"
+    script       = "cat /home/coder/.ssh/id_ed25519.pub 2>/dev/null || echo 'no key generated yet'"
+    interval     = 86400
+    timeout      = 5
+  }
 }
 
 resource "coder_app" "opencode" {

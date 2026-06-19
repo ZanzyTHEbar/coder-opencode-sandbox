@@ -132,7 +132,7 @@ resource "kubernetes_deployment_v1" "opencode" {
               exec {
                 command = [
                   "sh", "-c",
-                  "mkdir -p /home/coder/.opencode /home/coder/workspace && nohup opencode web --hostname 127.0.0.1 --port 4096 --cwd /home/coder/workspace >/home/coder/.opencode/server.log 2>&1 &"
+                  "mkdir -p /home/coder/.opencode /home/coder/workspace /home/coder/.ssh && chmod 700 /home/coder/.opencode /home/coder/.ssh && [ -f /home/coder/.ssh/id_ed25519 ] || ssh-keygen -t ed25519 -f /home/coder/.ssh/id_ed25519 -N '' -C 'opencode-workspace' >/dev/null 2>&1 && nohup opencode web --hostname 127.0.0.1 --port 4096 >/home/coder/.opencode/server.log 2>&1 &"
                 ]
               }
             }
