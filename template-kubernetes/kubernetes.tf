@@ -127,6 +127,17 @@ resource "kubernetes_deployment_v1" "opencode" {
 
           command = ["sh", "-lc", coder_agent.main.init_script]
 
+          lifecycle {
+            post_start {
+              exec {
+                command = [
+                  "sh", "-c",
+                  "mkdir -p /home/coder/.opencode /home/coder/workspace && nohup opencode web --hostname 127.0.0.1 --port 4096 --cwd /home/coder/workspace >/home/coder/.opencode/server.log 2>&1 &"
+                ]
+              }
+            }
+          }
+
           env {
             name  = "CODER_AGENT_TOKEN"
             value = coder_agent.main.token
