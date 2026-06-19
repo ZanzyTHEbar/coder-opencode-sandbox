@@ -7,6 +7,9 @@
 
 The fix for both is the same: **`CODER_WILDCARD_ACCESS_URL`**, **DNS `*.domain` → Coder**, **TLS for the wildcard**, and your reverse proxy (Coolify/Traefik) routing **`Host: *.<domain>`** to the Coder service. The OpenCode template uses **`subdomain = true`** on `coder_app` so the app is served at the **root of a dedicated hostname** (compatible with SPAs).
 
+For the external multi-tenant runtime, wildcard app routing still terminates at
+Coder. Do not create public routes directly to workspace pods.
+
 ---
 
 Without a wildcard access URL, users open the OpenCode app only through the Coder dashboard (Coder proxies to the workspace). With a **wildcard access URL** and TLS, each workspace app can have a stable, shareable URL like:

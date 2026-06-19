@@ -9,13 +9,23 @@ Per-user OpenCode sandboxes behind OIDC. Users log in via Authentik and get a de
 - **Template**: One workspace = one container + one persistent volume at `/home/coder`. Template registration is handled by Coolify post-deploy with `POST_DEPLOY_TEMPLATE_SOURCE=deployed_commit` by default. See [docs/TEMPLATE_REGISTRATION.md](docs/TEMPLATE_REGISTRATION.md).
 - **OpenCode**: Runs unchanged inside the container; state under `~/.local/share/opencode` and `~/.config/opencode` (on the volume). Workspaces can also provision a managed global OpenCode config under `~/.config/opencode` from a user-supplied Git URL or GitHub repo/tree/blob URL at creation time, clone one or more repos into `~/workspace`, run an optional generic workspace bootstrap command, and optionally cache/apply Linux dotfiles from a Git-backed source. Repo-local `.opencode` paths remain available for project-specific overrides. Workspaces can opt into password-protected public app routing so `opencode attach https://<app-url>` works from local machines without exposing sessions unauthenticated.
 
+For external multi-tenant users, the accepted architecture is Coder backed by a dedicated Kubernetes runtime plane, not the single-container personal runtime. Start at [ADR 0001](docs/adr/0001-multi-tenant-opencode-runtime.md) and [Multi-Tenant Architecture](docs/MULTI_TENANT_ARCHITECTURE.md).
+
+The Kubernetes path is currently a scaffold, not external-beta ready. It still
+needs Git SSH repo onboarding, OpenCode config bootstrap, workspace bootstrap,
+Linux dotfiles, per-workspace Git keys, and Vault-backed secret delivery before
+external users should be onboarded.
+
 ## Repository layout
 
 | Path | Purpose |
 |------|--------|
 | `docker-compose.yml` | Coder deployment stack. Keep Coolify base directory at `.` so `template/` and `coder-deployment/` bind-mount correctly. |
 | `template/` | Terraform template for the workspace volume, container, agent, and OpenCode app. |
+| `template-kubernetes/` | Kubernetes/Coder template scaffold for external multi-tenant workspaces. |
 | `image/` | Dockerfile for the sandbox image; built by CI to GHCR. |
+| `image-external/` | Hardened external-user OpenCode base image scaffold. |
+| `infra/` | Terraform, Packer, and Vault scaffolds for the dedicated runtime plane. |
 | `coder-deployment/` | Deployment helpers, including `.env.example` and `post-deploy.sh`. |
 | `scripts/` | Manual helpers such as `bootstrap-template.sh` and the Authentik OIDC setup script. |
 | `docs/` | Operator and user guides, deployment notes, wildcard app URL docs, and improvement backlog. |

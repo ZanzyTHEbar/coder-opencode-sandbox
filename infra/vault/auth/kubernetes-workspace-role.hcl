@@ -1,0 +1,5 @@
+bound_service_account_names      = "opencode-workspace"
+bound_service_account_namespaces = "opencode-*"
+policies                         = "opencode-workspace"
+audience                         = "vault"
+ttl                              = "1h"

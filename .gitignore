@@ -1,5 +1,7 @@
 # Terraform (keep .terraform.lock.hcl for reproducible builds)
 template/.terraform/
+template-kubernetes/.terraform/
+infra/terraform/**/.terraform/
 *.tfstate
 *.tfstate.*
 *.tfvars
