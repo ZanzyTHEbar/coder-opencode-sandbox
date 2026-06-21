@@ -5,7 +5,14 @@ resource "coder_agent" "main" {
   startup_script = templatefile("${path.module}/scripts/agent_startup.sh.tpl", {})
 
   env = {
-    HOME = "/home/coder"
+    GIT_AUTHOR_NAME     = coalesce(data.coder_workspace_owner.me.full_name, data.coder_workspace_owner.me.name)
+    GIT_AUTHOR_EMAIL    = data.coder_workspace_owner.me.email
+    GIT_COMMITTER_NAME  = coalesce(data.coder_workspace_owner.me.full_name, data.coder_workspace_owner.me.name)
+    GIT_COMMITTER_EMAIL = data.coder_workspace_owner.me.email
+    HOME                = "/home/coder"
+    LOGNAME             = "coder"
+    USER                = "coder"
+    WORKSPACE_REPO_URLS = data.coder_parameter.workspace_repo_urls.value
   }
 
   metadata {
@@ -28,7 +35,7 @@ resource "coder_agent" "main" {
     display_name = "Git SSH Key"
     key          = "2_git_ssh_key"
     script       = "cat /home/coder/.ssh/id_ed25519.pub 2>/dev/null || echo 'no key generated yet'"
-    interval     = 86400
+    interval     = 60
     timeout      = 5
   }
 }

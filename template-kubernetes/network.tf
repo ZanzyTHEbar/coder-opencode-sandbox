@@ -104,3 +104,32 @@ resource "kubernetes_network_policy_v1" "allow_coder" {
     }
   }
 }
+
+resource "kubernetes_network_policy_v1" "allow_vault" {
+  count = var.vault_git_secret_path == "" ? 0 : 1
+
+  metadata {
+    name      = "allow-vault"
+    namespace = kubernetes_namespace_v1.workspace.metadata[0].name
+  }
+
+  spec {
+    pod_selector {}
+    policy_types = ["Egress"]
+
+    egress {
+      ports {
+        port     = tostring(var.vault_port)
+        protocol = "TCP"
+      }
+
+      to {
+        namespace_selector {
+          match_labels = {
+            "kubernetes.io/metadata.name" = var.vault_namespace
+          }
+        }
+      }
+    }
+  }
+}

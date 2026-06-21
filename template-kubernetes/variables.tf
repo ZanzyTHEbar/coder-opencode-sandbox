@@ -5,8 +5,9 @@ variable "namespace_prefix" {
 }
 
 variable "opencode_image" {
-  description = "Approved OpenCode runtime image reference. Prefer immutable digest for production."
+  description = "Approved OpenCode runtime image reference pinned by immutable digest."
   type        = string
+  default     = "ghcr.io/zanzythebar/coder-opencode-sandbox@sha256:cc1b96eb61212139f4767020b7d094eb179515706083103ef75b1a3da76a25e4"
 }
 
 variable "storage_class_name" {
@@ -66,6 +67,30 @@ variable "runtime_class_name" {
   description = "Optional RuntimeClass for stronger sandboxing, such as gVisor. Empty string means default runtime."
   type        = string
   default     = ""
+}
+
+variable "vault_role" {
+  description = "Vault Kubernetes auth role for this workspace. Used only when vault_git_secret_path is set."
+  type        = string
+  default     = "opencode-workspace"
+}
+
+variable "vault_git_secret_path" {
+  description = "Optional Vault KV path injected into /vault/secrets/git. Leave empty to disable Vault Agent injection."
+  type        = string
+  default     = ""
+}
+
+variable "vault_namespace" {
+  description = "Namespace containing Vault. Used only when vault_git_secret_path is set."
+  type        = string
+  default     = "vault"
+}
+
+variable "vault_port" {
+  description = "Vault service port. Used only when vault_git_secret_path is set."
+  type        = number
+  default     = 8200
 }
 
 variable "internal_egress_block_cidrs" {

@@ -6,6 +6,10 @@ resource "kubernetes_namespace_v1" "workspace" {
       "app.kubernetes.io/name"       = "opencode-workspace"
       "app.kubernetes.io/managed-by" = "coder"
       "coder.com/workspace-id"       = data.coder_workspace.me.id
+
+      "pod-security.kubernetes.io/enforce" = "restricted"
+      "pod-security.kubernetes.io/audit"   = "restricted"
+      "pod-security.kubernetes.io/warn"    = "restricted"
     }
   }
 }
@@ -20,6 +24,8 @@ resource "kubernetes_service_account_v1" "workspace" {
 }
 
 resource "kubernetes_persistent_volume_claim_v1" "home" {
+  wait_until_bound = false
+
   metadata {
     name      = "home"
     namespace = kubernetes_namespace_v1.workspace.metadata[0].name
@@ -38,6 +44,8 @@ resource "kubernetes_persistent_volume_claim_v1" "home" {
 }
 
 resource "kubernetes_persistent_volume_claim_v1" "workspace" {
+  wait_until_bound = false
+
   metadata {
     name      = "workspace"
     namespace = kubernetes_namespace_v1.workspace.metadata[0].name
@@ -80,6 +88,14 @@ resource "kubernetes_deployment_v1" "opencode" {
         labels = {
           app = "opencode"
         }
+
+        annotations = var.vault_git_secret_path == "" ? {} : {
+          "vault.hashicorp.com/agent-inject"                            = "true"
+          "vault.hashicorp.com/agent-service-account-token-volume-name" = "vault-token"
+          "vault.hashicorp.com/auth-config-audience"                    = "vault"
+          "vault.hashicorp.com/role"                                    = var.vault_role
+          "vault.hashicorp.com/agent-inject-secret-git"                 = var.vault_git_secret_path
+        }
       }
 
       spec {
@@ -89,35 +105,12 @@ resource "kubernetes_deployment_v1" "opencode" {
 
         security_context {
           run_as_non_root = true
-          run_as_user     = 1800
-          run_as_group    = 1800
-          fs_group        = 1800
+          run_as_user     = 1001
+          run_as_group    = 1001
+          fs_group        = 1001
 
           seccomp_profile {
             type = "RuntimeDefault"
-          }
-        }
-
-        init_container {
-          name    = "fix-ownership"
-          image   = var.opencode_image
-          command = ["sh", "-c", "chown -R 1800:1800 /home/coder /home/coder/workspace 2>/dev/null; chmod 700 /home/coder/.opencode 2>/dev/null; true"]
-
-          security_context {
-            run_as_user                = 0
-            run_as_group               = 0
-            run_as_non_root            = false
-            allow_privilege_escalation = false
-            privileged                 = false
-
-            capabilities {
-              add = ["CHOWN"]
-            }
-          }
-
-          volume_mount {
-            name       = "home"
-            mount_path = "/home/coder"
           }
         }
 
@@ -127,20 +120,24 @@ resource "kubernetes_deployment_v1" "opencode" {
 
           command = ["sh", "-lc", coder_agent.main.init_script]
 
-          lifecycle {
-            post_start {
-              exec {
-                command = [
-                  "sh", "-c",
-                  "mkdir -p /home/coder/.opencode /home/coder/workspace /home/coder/.ssh && chmod 700 /home/coder/.opencode /home/coder/.ssh && [ -f /home/coder/.ssh/id_ed25519 ] || ssh-keygen -t ed25519 -f /home/coder/.ssh/id_ed25519 -N '' -C 'opencode-workspace' >/dev/null 2>&1 && nohup opencode web --hostname 127.0.0.1 --port 4096 >/home/coder/.opencode/server.log 2>&1 &"
-                ]
-              }
-            }
-          }
-
           env {
             name  = "CODER_AGENT_TOKEN"
             value = coder_agent.main.token
+          }
+
+          env {
+            name  = "HOME"
+            value = "/home/coder"
+          }
+
+          env {
+            name  = "LOGNAME"
+            value = "coder"
+          }
+
+          env {
+            name  = "USER"
+            value = "coder"
           }
 
           port {
@@ -210,6 +207,24 @@ resource "kubernetes_deployment_v1" "opencode" {
 
           empty_dir {
             medium = "Memory"
+          }
+        }
+
+        dynamic "volume" {
+          for_each = var.vault_git_secret_path == "" ? [] : [1]
+
+          content {
+            name = "vault-token"
+
+            projected {
+              sources {
+                service_account_token {
+                  path               = "token"
+                  audience           = "vault"
+                  expiration_seconds = 3600
+                }
+              }
+            }
           }
         }
       }
