@@ -11,10 +11,19 @@ from authentik.crypto.models import CertificateKeyPair
 from authentik.flows.models import Flow
 from authentik.providers.oauth2.models import OAuth2Provider, ScopeMapping
 
-CODER_ACCESS_URL = "https://coder.zacariahheim.com"
+
+def required_env(name):
+    value = os.environ.get(name)
+    if not value:
+        raise SystemExit(f"missing required environment variable: {name}")
+    return value
+
+
+CODER_ACCESS_URL = required_env("CODER_ACCESS_URL")
 REDIRECT_URI = f"{CODER_ACCESS_URL}/api/v2/users/oidc/callback"
-APP_SLUG = "coder"
-APP_NAME = "Coder"
+AUTHENTIK_PUBLIC_URL = required_env("AUTHENTIK_PUBLIC_URL")
+APP_SLUG = os.environ.get("AUTHENTIK_CODER_APP_SLUG", "coder")
+APP_NAME = os.environ.get("AUTHENTIK_CODER_APP_NAME", "Coder")
 
 auth_flow = Flow.objects.get(slug="default-authentication-flow")
 authz_flow = Flow.objects.get(slug="default-provider-authorization-implicit-consent")
@@ -63,6 +72,9 @@ for scope in ScopeMapping.objects.filter(scope_name__in=["openid", "email", "pro
     provider.property_mappings.add(scope)
 
 print("CODER_OIDC_CLIENT_ID", provider.client_id)
-print("CODER_OIDC_CLIENT_SECRET", provider.client_secret)
-print("CODER_OIDC_ISSUER_URL", f"https://auth.zacariahheim.com/application/o/{app.slug}/")
+if os.environ.get("PRINT_CODER_OIDC_CLIENT_SECRET") == "1":
+    print("CODER_OIDC_CLIENT_SECRET", provider.client_secret)
+else:
+    print("CODER_OIDC_CLIENT_SECRET", "[set PRINT_CODER_OIDC_CLIENT_SECRET=1 to print]")
+print("CODER_OIDC_ISSUER_URL", f"{AUTHENTIK_PUBLIC_URL}/application/o/{app.slug}/")
 print("CODER_ACCESS_URL", CODER_ACCESS_URL)
