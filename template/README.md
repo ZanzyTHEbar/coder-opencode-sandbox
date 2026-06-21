@@ -19,7 +19,7 @@ Terraform template for Coder: one workspace = one container + one persistent vol
 | Name | Default | Description |
 |------|---------|-------------|
 | `docker_socket` | `""` | Reserved. Use DOCKER_HOST on the Coder deployment for remote Docker. |
-| `sandbox_image` | `ghcr.io/.../coder-opencode-sandbox:latest` (see `variables.tf`) | Docker image for the sandbox (build from `../image` or use GHCR). |
+| `sandbox_image` | Pinned GHCR digest (see `variables.tf`) | Docker image for the sandbox (build from `../image` or use a promoted GHCR digest). |
 | `workspace_docker_network` | `""` | Optional Docker network to attach workspace containers to. Leave empty to use Docker's default bridge. |
 
 ## Workspace Parameters
@@ -48,7 +48,7 @@ From this directory (or repo root with `--directory template`):
 coder templates create opencode-sandbox --directory template
 ```
 
-Set `sandbox_image` to your built image (e.g. `opencode-sandbox:latest` or `your-registry/opencode-sandbox:latest`).
+Set `sandbox_image` to your built local image for dev smoke tests, or to a promoted immutable registry digest for production.
 
 When users provide `opencode_config_url`, the rendered startup script fetches that repo on workspace boot, stores it under `~/.opencode-profile/releases/`, and links `~/.config/opencode` to the selected profile. This keeps the managed profile in a cache while still exposing it through OpenCode's global config location. If `~/.config/opencode` already exists outside that managed cache, the script leaves it untouched and logs a warning instead of overwriting it.
 

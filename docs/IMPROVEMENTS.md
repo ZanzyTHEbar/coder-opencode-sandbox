@@ -100,7 +100,7 @@ This document enumerates current gaps, desired improvements, and priority areas 
 
 **How to do better:**
 
-- Use a build matrix (e.g., `platforms: linux/amd64,linux/arm64` with buildx) in CI to build/push manifest, ensuring `ghcr.io/.../coder-opencode-sandbox:latest` works on both.
+- Use a build matrix (e.g., `platforms: linux/amd64,linux/arm64` with buildx) in CI to build/push a manifest, then deploy by immutable digest so both architectures resolve correctly.
 
 **Status:** In backlog; implement when arm64 demand arises.
 

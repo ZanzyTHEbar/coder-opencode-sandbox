@@ -19,7 +19,7 @@ If **Base directory** is `coder-deployment`, Coolify’s deployment root is **on
 
 ## Flow
 
-1. **Image** — Built and pushed to GHCR by GitHub Actions (or your own registry). The template defaults to `ghcr.io/zanzythebar/coder-opencode-sandbox:latest`.
+1. **Image** — Built by GitHub Actions (or your own registry), scanned, then promoted. Production templates use an immutable digest such as `ghcr.io/zanzythebar/coder-opencode-sandbox@sha256:<digest>`.
 2. **Deploy Coder** — Coolify deploys with build-pack **Docker Compose** and **Base directory** **`.`** (repo root), using root `docker-compose.yml`.
 3. **Post-deploy** — `sh /deploy/post-deploy.sh` in the **coder** service (§3) runs **`coder templates push`**. With **`POST_DEPLOY_TEMPLATE_SOURCE=deployed_commit`** (default), the pushed template always comes from the exact deployed **`SOURCE_COMMIT`**, not the mount. See [TEMPLATE_REGISTRATION.md](TEMPLATE_REGISTRATION.md).
 
@@ -44,7 +44,7 @@ Set in Coolify for the Coder app:
 - **For post-deploy template push:**
   - **CODER_URL** — `http://127.0.0.1:4099` (Coder inside the same container).
   - **CODER_TOKEN** — A Coder **API token** (not a browser session cookie). Create after first login; store in Coolify as a secret. See **§ API tokens and 7-day expiry** below if the UI only allows short-lived tokens.
-- **SANDBOX_IMAGE** (optional) — Override the workspace sandbox image (default in compose: `ghcr.io/zanzythebar/coder-opencode-sandbox:latest`).
+- **SANDBOX_IMAGE** (optional) — Override the workspace sandbox image. Use a promoted immutable digest in production; use `:latest` only for local/dev smoke tests.
 - **Token lifetime (optional but recommended for automation)** — Root [`docker-compose.yml`](../docker-compose.yml) sets **`CODER_DEFAULT_TOKEN_LIFETIME`** and **`CODER_MAX_ADMIN_TOKEN_LIFETIME`** (default `8760h` ≈ one year) so tokens you create are allowed to last longer than Coder’s stock **7-day** default. Override in Coolify if your policy needs different values.
 - **Coder image / port (optional)** — **`CODER_VERSION`** pins `ghcr.io/coder/coder:<tag>` (default `latest`). **`CODER_HOST_PORT`** maps the host port to container **4099** (upstream’s [official compose](https://github.com/coder/coder/blob/main/compose.yaml) uses **7080**). **`DOCKER_GID`** + uncommented **`group_add`** in compose if Docker workspaces fail with socket permission errors — see [CODER_OFFICIAL_DEPLOYMENT.md](CODER_OFFICIAL_DEPLOYMENT.md).
 
@@ -187,8 +187,8 @@ Post-deploy only needs the **`CODER_TOKEN` env var** in the container, not an op
 3. **`CODER_TOKEN`** — Must be a valid API token for a user who can manage templates. Export **`CODER_SESSION_TOKEN`** for the CLI (`post-deploy.sh` does this). If OIDC never worked, you never created one; see **Deadlock** in §4.
 4. **Base directory** — Must be repo root (`.`) so `/templates` contains your Terraform template. If you see the FATAL line above, fix base directory and redeploy.
 5. **Manual push (bypass post-deploy)** — From any machine with `coder` CLI:  
-   `CODER_URL=https://<your-coder-host> CODER_SESSION_TOKEN=<token> coder templates push opencode-sandbox -d ./template --variable sandbox_image=ghcr.io/zanzythebar/coder-opencode-sandbox:latest -y`  
-   (Use your real URL, token, and image.)
+   `CODER_URL=https://<your-coder-host> CODER_SESSION_TOKEN=<token> coder templates push opencode-sandbox -d ./template --variable sandbox_image=ghcr.io/zanzythebar/coder-opencode-sandbox@sha256:<digest> -y`
+   (Use your real URL, token, and promoted image digest.)
 
 6. **Stale `/templates` in the Coder container** — If `grep chown /templates/main.tf` inside the container does not show the latest commit, Coolify’s deployment checkout may be behind `main`. **Redeploy** the app (pull latest Git), or push using a **fresh tree from GitHub** (same idea as the fetch fallback in §3): extract `main.tar.gz`, set `TEMPLATE_DIR` to `…/template`, then `sh /deploy/post-deploy.sh`.
 

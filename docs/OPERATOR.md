@@ -2,6 +2,10 @@
 
 ## 1. Deploy Coder
 
+Before onboarding external users, all required items in
+[External Beta Gate](EXTERNAL_BETA_GATE.md) must pass or have an explicit waiver.
+The gate lists current non-waivable security blockers.
+
 - Use the reference [docker-compose.yml](../docker-compose.yml) at the **repository root** (run `docker compose up` from the repo root so `./template` and `./coder-deployment` mount correctly), or deploy Coder on Kubernetes per [Coder docs](https://coder.com/docs/install).
 - **Upstream parity:** This compose follows [Coder’s official `compose.yaml`](https://github.com/coder/coder/blob/main/compose.yaml) for Postgres wiring, health checks, and Docker provisioner basics. See [CODER_OFFICIAL_DEPLOYMENT.md](CODER_OFFICIAL_DEPLOYMENT.md) for a diff table (ports, `coolify` network, OIDC, bind mounts) and **Docker socket `group_add`** if you hit permission errors.
 - **Database:** The reference compose runs a **dedicated PostgreSQL** service and sets **`CODER_PG_CONNECTION_URL`** (not Coder’s built-in embedded Postgres). Persist the **`postgres-data`** volume; set **`POSTGRES_PASSWORD`** (and optional **`POSTGRES_USER`** / **`POSTGRES_DB`**) via env or secrets. See [COOLIFY_E2E.md](COOLIFY_E2E.md) § *Where Coder stores data*.
@@ -31,11 +35,11 @@ See [authentik/OIDC_SETUP.md](authentik/OIDC_SETUP.md) for step-by-step Authenti
 ## 4. Build and set the sandbox image
 
 **Option A — Use the pre-built image (recommended)**  
-On every push to `main`, [GitHub Actions](../.github/workflows/build-push-image.yml) builds and pushes the image to GHCR. Use:
+On every push to `main`, [GitHub Actions](../.github/workflows/build-push-image.yml) builds a scan candidate, runs the critical-vulnerability scan and SBOM gate, then promotes GHCR tags. For production templates, use the promoted immutable digest reference:
 
-- **`ghcr.io/<owner>/coder-opencode-sandbox:latest`** (e.g. `ghcr.io/zanzythebar/coder-opencode-sandbox:latest`)
+- **`ghcr.io/<owner>/coder-opencode-sandbox@sha256:<digest>`**
 
-Set this as the template variable **sandbox_image**. After the first workflow run, set the package to **Public** in the repo’s Packages settings. See the [main README](../README.md#pre-built-image-ghcr) for details.
+Use `:latest` only for local/dev smoke tests. Set the digest reference as the template variable **sandbox_image** or **opencode_image**. CI scanners use the workflow's GHCR login; make the package **Public** only if your Coder runtime pulls without registry credentials. See the [main README](../README.md#pre-built-image-ghcr) for details.
 
 **Option B — Build locally**
 

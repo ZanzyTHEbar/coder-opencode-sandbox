@@ -11,10 +11,15 @@ Per-user OpenCode sandboxes behind OIDC. Users log in via Authentik and get a de
 
 For external multi-tenant users, the accepted architecture is Coder backed by a dedicated Kubernetes runtime plane, not the single-container personal runtime. Start at [ADR 0001](docs/adr/0001-multi-tenant-opencode-runtime.md) and [Multi-Tenant Architecture](docs/MULTI_TENANT_ARCHITECTURE.md).
 
-The Kubernetes path is currently a scaffold, not external-beta ready. It still
-needs Git SSH repo onboarding, OpenCode config bootstrap, workspace bootstrap,
-Linux dotfiles, per-workspace Git keys, and Vault-backed secret delivery before
-external users should be onboarded.
+The Kubernetes path is currently a scaffold, not external-beta ready. It has
+partial Git SSH repo onboarding and validated VM100 Vault secret delivery, but
+still needs a provider-ready Git key registration flow, OpenCode config
+bootstrap, workspace bootstrap, Linux dotfiles, production runtime codification,
+and backup/custom-image release gates before external users should be onboarded.
+The LXC proof-of-life runtime fails internal egress denial; the VM `100` runtime
+passed isolation, fresh Coder workspace/app access, and Vault secret-read
+validation. Track the release decision in
+[External Beta Gate](docs/EXTERNAL_BETA_GATE.md).
 
 ## Repository layout
 

@@ -7,9 +7,13 @@
 
 ## Create and use your workspace
 
+The Docker template supports the full set of options below. The Kubernetes
+external-user template currently supports `Workspace repo URLs` plus the Git SSH
+key metadata flow; config/bootstrap/dotfiles parity is still in progress.
+
 1. **Create a workspace** from the **OpenCode sandbox** template (e.g. name it `opencode` or `main`). Use one long-lived workspace for many repos unless you intentionally need isolation.
 2. Optional: set **OpenCode config URL** to a Git URL or GitHub repo/tree/blob URL that contains your OpenCode config. You can also set **OpenCode config ref** and **OpenCode config subdirectory** if needed.
-3. Optional: set **Workspace repo URLs** to a comma-separated list of repos to clone into `~/workspace`.
+3. Optional: set **Workspace repo URLs** to a comma-separated list of repos to clone into `~/workspace`. For private SSH repos, start once, copy the **Git SSH Key** metadata value into your Git provider as a deploy key, then restart the workspace so the missing clone is retried.
 4. Optional: set **Workspace bootstrap command** if you want to install tools or prepare the Linux environment before OpenCode starts. You can also set **Workspace bootstrap URL** to run that command from a Git repo or GitHub tree/blob URL.
 5. Optional: set **OpenCode app sharing** to **Public URL attach** only if you need `opencode attach https://<app-url>` from a local machine without Coder browser cookies. This mode is protected by a generated OpenCode server password. Keep **Owner only** for normal browser, terminal, SSH, and port-forward workflows.
 6. **Start** the workspace. The first time may take a minute while the container, volume, requested OpenCode profile, workspace repos, and any bootstrap are created.
@@ -73,6 +77,8 @@ Treat the copied URL and server password as workspace access secrets.
 - If you set **OpenCode config URL**, the workspace creates a managed profile under `~/.opencode-profile/` and links `~/.config/opencode` to it.
 - Repo-local `.opencode` directories and `opencode.json` files remain available for project-specific overrides inside cloned repos or other workspace folders.
 - If you set **Workspace repo URLs**, each missing repo is cloned into `~/workspace/<repo-name>`. Existing files, directories, and repos are left untouched.
+- Private repo clone failures are non-fatal so the workspace can start and show
+  the generated public key for registration.
 - If you set **Workspace bootstrap command**, it reruns on every startup as `coder`, before OpenCode starts. Make it idempotent. By default, failures and timeouts are logged but OpenCode still starts; choose **Fail startup** only when the bootstrap is required for the workspace to be useful.
 - If you set **Workspace bootstrap URL**, the selected bootstrap repo is cached under `~/.workspace-bootstrap/`. The command runs from that selected directory with `BOOTSTRAP_DIR`, `BOOTSTRAP_REPO_DIR`, and `WORKSPACE_DIR` exported. Without a bootstrap URL, the command runs from `~/workspace`.
 - If you set **Linux dotfiles URL**, the selected dotfiles repo is cached under `~/.dotfiles-profile/`. When **Linux dotfiles install command** is set, that command reruns on every startup with the same timeout and failure policy as workspace bootstrap. This legacy path remains available for dotfiles-specific setup.

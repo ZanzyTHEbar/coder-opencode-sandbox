@@ -53,11 +53,10 @@ Browser or CLI
 The Kubernetes template intentionally starts with the runtime/security contract.
 Before external beta it still needs:
 
-- GitHub and generic Git SSH repo onboarding,
-- per-workspace Ed25519 SSH keys,
+- provider-ready Git SSH key registration and repo onboarding,
 - OpenCode config bootstrap,
 - workspace bootstrap commands,
 - Linux dotfiles support,
-- Vault-backed secret delivery with per-workspace policies,
+- durable Vault deployment, audit logging, and policy lifecycle automation,
 - retention and backup workers,
 - custom image builder jobs.

@@ -6,10 +6,10 @@ Use this guide to go from a fresh checkout to a working OpenCode sandbox on Code
 
 ## 1. Image
 
-On every push to `main`, [GitHub Actions](.github/workflows/build-push-image.yml) builds [image/Dockerfile](image/Dockerfile) and pushes to GHCR. The template defaults `sandbox_image` to:
+On every push to `main`, [GitHub Actions](.github/workflows/build-push-image.yml) builds [image/Dockerfile](image/Dockerfile), scans it, emits an SBOM, then promotes GHCR tags. For production, set `sandbox_image` to the promoted immutable digest:
 
 ```text
-ghcr.io/zanzythebar/coder-opencode-sandbox:latest
+ghcr.io/zanzythebar/coder-opencode-sandbox@sha256:<digest>
 ```
 
 ## 2. Deploy Coder and configure Authentik

@@ -9,6 +9,8 @@ uses a null builder and does not create a VM image yet.
 - Pinned base OS.
 - k3s prerequisites.
 - Runtime kernel/modules required by storage and NetworkPolicy.
+- VM runtime support for the chosen NetworkPolicy-capable CNI/policy engine
+  (Calico first; Canal if flannel data plane compatibility is required).
 - Node hardening baseline.
 - Monitoring/logging agents if used.
 - No tenant data.
@@ -21,5 +23,7 @@ uses a null builder and does not create a VM image yet.
 3. Build image from `infra/packer/runtime-node.pkr.hcl`.
 4. Smoke boot a test VM.
 5. Run k3s/node readiness checks.
-6. Promote the image ID through Terraform variables.
-7. Drain/replace runtime nodes through the VM orchestrator path.
+6. Run `scripts/check-k8s-isolation.sh`; do not promote the image if internal
+   NodePort/LAN, Kubernetes API, or metadata probes are reachable.
+7. Promote the image ID through Terraform variables.
+8. Drain/replace runtime nodes through the VM orchestrator path.
