@@ -6,8 +6,8 @@ variable "docker_socket" {
 }
 
 variable "sandbox_image" {
-  default     = "ghcr.io/zanzythebar/coder-opencode-sandbox:latest"
-  description = "Docker image for the OpenCode sandbox (Linux + Coder agent + OpenCode server). Default: repo's GHCR image."
+  default     = "ghcr.io/zanzythebar/coder-opencode-sandbox@sha256:cc1b96eb61212139f4767020b7d094eb179515706083103ef75b1a3da76a25e4"
+  description = "Docker image for the OpenCode sandbox (Linux + Coder agent + OpenCode server). Default: repo's pinned GHCR image."
   type        = string
 }
 

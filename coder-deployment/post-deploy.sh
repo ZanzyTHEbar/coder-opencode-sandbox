@@ -14,7 +14,7 @@ set -e
 
 CODER_URL="${CODER_URL:-http://127.0.0.1:4099}"
 export CODER_URL
-SANDBOX_IMAGE="${SANDBOX_IMAGE:-ghcr.io/zanzythebar/coder-opencode-sandbox:latest}"
+SANDBOX_IMAGE="${SANDBOX_IMAGE:-ghcr.io/zanzythebar/coder-opencode-sandbox@sha256:cc1b96eb61212139f4767020b7d094eb179515706083103ef75b1a3da76a25e4}"
 MOUNT_TEMPLATE_DIR="${TEMPLATE_DIR:-/templates}"
 POST_DEPLOY_TEMPLATE_SOURCE="${POST_DEPLOY_TEMPLATE_SOURCE:-deployed_commit}"
 POST_DEPLOY_GITHUB_REPO="${POST_DEPLOY_GITHUB_REPO:-ZanzyTHEbar/coder-opencode-sandbox}"

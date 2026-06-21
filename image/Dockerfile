@@ -29,11 +29,12 @@ RUN ARCH=$(dpkg --print-architecture) && \
 ENV PATH="/usr/local/bin:${PATH}"
 RUN opencode --version
 
-# User coder: match Coder's default workspace user, and add to sudoers group.
-RUN useradd -m -s /bin/bash -d /home/coder -G sudo coder && \
+# User coder: match the Kubernetes template's fixed UID/GID, and add to sudoers group.
+RUN groupadd --gid 1001 coder && \
+    useradd --uid 1001 --gid 1001 -m -s /bin/bash -d /home/coder -G sudo coder && \
     echo "coder ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers.d/coder && \
     chmod 0440 /etc/sudoers.d/coder && \
-    chown -R coder:coder /home/coder
+    chown -R 1001:1001 /home/coder
 
 ENV HOME=/home/coder
 

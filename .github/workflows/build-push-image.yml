@@ -1,5 +1,5 @@
-# Build OpenCode sandbox image and push to GHCR (public).
-# Image: ghcr.io/<owner>/coder-opencode-sandbox:latest (and :<short_sha>, :v<opencode_version>)
+# Build OpenCode sandbox image, scan it, then promote stable GHCR tags.
+# Image: ghcr.io/<owner>/coder-opencode-sandbox:latest (and :<short_sha>, :v<opencode_version>) after scan/SBOM passes.
 # After first run: repo → Packages → coder-opencode-sandbox → Package settings → Change visibility to Public.
 
 name: Build and push image to GHCR
@@ -21,10 +21,22 @@ jobs:
       - name: Terraform setup
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: "1.5.0"
+          terraform_version: "1.6.6"
           terraform_wrapper: false
-      - name: Terraform init and validate
+      - name: Terraform fmt
+        run: terraform fmt -check -recursive template template-kubernetes infra/terraform/runtime-plane
+      - name: Terraform init and validate Docker template
         working-directory: template
+        run: |
+          terraform init -backend=false
+          terraform validate
+      - name: Terraform init and validate Kubernetes template
+        working-directory: template-kubernetes
+        run: |
+          terraform init -backend=false
+          terraform validate
+      - name: Terraform init and validate runtime-plane scaffold
+        working-directory: infra/terraform/runtime-plane
         run: |
           terraform init -backend=false
           terraform validate
@@ -61,17 +73,56 @@ jobs:
           IMAGE_BASE=$(echo "${{ env.REGISTRY }}/${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
           echo "image_base=${IMAGE_BASE}" >> $GITHUB_OUTPUT
 
-      - name: Build and push
+      - name: Build and push scan candidate
+        id: build
         uses: docker/build-push-action@v5
         with:
           context: ./image
           file: ./image/Dockerfile
           push: true
-          tags: |
-            ${{ steps.meta.outputs.image_base }}:latest
-            ${{ steps.meta.outputs.image_base }}:${{ steps.meta.outputs.short_sha }}
-            ${{ steps.meta.outputs.image_base }}:v${{ steps.meta.outputs.opencode_version }}
+          tags: ${{ steps.meta.outputs.image_base }}:scan-${{ steps.meta.outputs.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: |
             OPENCODE_VERSION=${{ steps.meta.outputs.opencode_version }}
+
+      - name: Scan pushed image
+        env:
+          IMAGE_REF: ${{ steps.meta.outputs.image_base }}@${{ steps.build.outputs.digest }}
+        run: |
+          docker run --rm -v "$HOME/.docker:/root/.docker:ro" aquasec/trivy:0.58.2 image \
+            --scanners vuln \
+            --severity CRITICAL \
+            --exit-code 1 \
+            --ignore-unfixed \
+            "$IMAGE_REF"
+
+      - name: Generate SBOM
+        env:
+          IMAGE_REF: ${{ steps.meta.outputs.image_base }}@${{ steps.build.outputs.digest }}
+        run: |
+          mkdir -p sbom
+          docker run --rm \
+            -v "$HOME/.docker:/root/.docker:ro" \
+            -v "$PWD/sbom:/out" \
+            anchore/syft:v1.18.1 "$IMAGE_REF" \
+            -o spdx-json=/out/coder-opencode-sandbox.spdx.json
+
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: coder-opencode-sandbox-sbom
+          path: sbom/coder-opencode-sandbox.spdx.json
+
+      - name: Promote scanned image tags
+        env:
+          IMAGE_REF: ${{ steps.meta.outputs.image_base }}@${{ steps.build.outputs.digest }}
+          IMAGE_BASE: ${{ steps.meta.outputs.image_base }}
+          SHORT_SHA: ${{ steps.meta.outputs.short_sha }}
+          OPENCODE_VERSION: ${{ steps.meta.outputs.opencode_version }}
+        run: |
+          docker buildx imagetools create \
+            -t "$IMAGE_BASE:latest" \
+            -t "$IMAGE_BASE:$SHORT_SHA" \
+            -t "$IMAGE_BASE:v$OPENCODE_VERSION" \
+            "$IMAGE_REF"

@@ -14,7 +14,7 @@ REPO_ROOT="${SCRIPT_DIR}/.."
 TEMPLATE_NAME="opencode-sandbox"
 TEMPLATE_DIR="${REPO_ROOT}/template"
 # Must match template/main.tf variable sandbox_image default (GHCR image built by .github/workflows/build-push-image.yml)
-SANDBOX_IMAGE="${SANDBOX_IMAGE:-ghcr.io/zanzythebar/coder-opencode-sandbox:latest}"
+SANDBOX_IMAGE="${SANDBOX_IMAGE:-ghcr.io/zanzythebar/coder-opencode-sandbox@sha256:cc1b96eb61212139f4767020b7d094eb179515706083103ef75b1a3da76a25e4}"
 
 cd "$REPO_ROOT"
 
